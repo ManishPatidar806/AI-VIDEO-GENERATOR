@@ -1,7 +1,6 @@
 from sqlmodel import Field, SQLModel,Relationship
 from datetime import datetime
 from typing import Optional,List
-from app.models.videoSessions_model import VideoSession
 
 class User(SQLModel,table=True):
     __tablename__='users'
@@ -12,4 +11,4 @@ class User(SQLModel,table=True):
     refreshToken:Optional[str] = None
     created_at:datetime = Field(default_factory=datetime.utcnow,nullable=False)
     updated_at: Optional[datetime] = Field(default=None, sa_column_kwargs={"onupdate": datetime.utcnow})
-    video_sessions:List[VideoSession] = Relationship(back_populates="user")
+    video_sessions:List["VideoSession"] = Relationship(back_populates="user")

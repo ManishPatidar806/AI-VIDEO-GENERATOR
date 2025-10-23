@@ -1,0 +1,98 @@
+# ------------------------------
+# Python / FastAPI backend
+# ------------------------------
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.env.bak/
+.venv/
+ENV/
+env/
+venv.bak/
+
+# Environment variables
+*.env
+*.env.local
+
+# PyInstaller
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# VS Code
+.vscode/
+.code-workspace
+
+# PyCharm
+.idea/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Logs
+*.log
+logs/
+logging/
+*.out
+
+# SQLite / Database
+*.db
+*.sqlite3
+
+# Local build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+
+# FastAPI static/media files (if used)
+staticfiles/
+media/
+uploads/
+temp/
+
+# Docker
+Dockerfile~
+docker-compose*.yml~
+.docker/
+*.pid
+
+# Mac / Linux / Windows system files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Node modules (if you have a frontend inside the same repo)
+node_modules/
+
+# Cache
+__pypackages__/
+.cache/
