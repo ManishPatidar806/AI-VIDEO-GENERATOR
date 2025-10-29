@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SENTRY_DNS:str| None=None
     ALLOWED_HOSTS:list[str]=["*"]
     DATABASE_URL:str
+    NEBIUS_API_KEYS:str
     
 
     class Config:

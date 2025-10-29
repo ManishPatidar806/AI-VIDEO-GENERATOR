@@ -1,68 +1,33 @@
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda, RunnableParallel
-from langchain_core.documents import Document
-from langchain_google_genai import ChatGoogleGenerativeAI
+from moviepy import concatenate_videoclips,CompositeAudioClip,AudioFileClip,VideoFileClip
+from langchain_google_genai import ChatGoogleGenerativeAI 
 from app.core.config import settings
 from langchain_core.output_parsers import PydanticOutputParser
-from pydantic import BaseModel,Field
 from typing import List
-from langchain_core.prompts import PromptTemplate
+from openai import OpenAI
+import requests
+import os
+from gtts import gTTS
+import time
+from google import genai
+from google.genai import types
+videoId = "9ofL45Mrzj0"
+import uuid 
+from app.schemas.ml_process_response import ImageGeneratorResponse,StoryGeneratorResponse,VideoWithVoiceoverResponse,VideoGeneratorResponse,StoryListResponse
+from app.utils.prompt_template import image_generator_prompt , summary_prompt
 
-videoId = "dZqa_9H803w"
+
+OUTPUT_DIR = "nebius_scene_images"
+# Ensure the output directory exists
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',google_api_key=settings.GOOGLE_API_KEY)
+client = genai.Client()
 
+pydanticParser = PydanticOutputParser(pydantic_object=StoryListResponse)
 
-
-
-def summary_prompt(chunk_text: str, previous_summary: str = "") -> str:
-    return f"""
-You are an expert technical and general summarizer. I will provide a transcript of a video in multiple chunks. Your task is to create a **comprehensive, structured summary** that **includes every detail**, even if repetitive.
-
-Instructions:
-
-1. **Previous summary:**  
-   - Use it to maintain context. If empty, treat this as the first chunk.
-
-2. **Current chunk:**  
-   - Read carefully and incorporate new ideas, steps, examples, or details.  
-   - Preserve the **order of concepts**.  
-   - Retain all technical terms, proper nouns, methods, and names exactly.  
-   - Include examples, illustrations, or clarifications—do not skip them.
-
-3. **Structure:**  
-   - Organize using logical sections and bullet points. Suggested sections:  
-     - Introduction / Context  
-     - Main Concepts / Ideas  
-     - Steps, Methods, or Workflows  
-     - Examples or Illustrations  
-     - Notes, Tips, or Warnings  
-     - Conclusion  
-   - Repeated points should be included if they reinforce understanding.
-
-4. **Tone and style:**  
-   - Keep it clear and readable.  
-   - Summarize progressively, building on previous content.  
-   - Do not remove important details for brevity.
-
-5. **Output:**  
-   - Provide a single updated summary including all previous and current content.  
-   - Ensure nothing is lost.
-
-Previous summary:
-{previous_summary}
-
-Current transcript chunk:
-{chunk_text}
-
-Updated comprehensive summary:
-"""
-
-
-
-
+# ! Youtube Transcript and Summary Generator
 def transcript_generator(videoId:str)->str:
     try:
         summary=""
@@ -82,218 +47,390 @@ def transcript_generator(videoId:str)->str:
         # return TranscriptUploadResponse(message="Video is Not Available",status=404,success=False)   
         return "Video is not availabel"
 
-class StoryGeneratorResponse(BaseModel):
-    scene: str = Field(..., description="The title of the scene")
-    narration: str = Field(..., description="The creative narration or dialogue for this scene")
-    visual_cues: str = Field(..., description="Detailed description of visuals, characters, environment, and mood")
-    prompts: List[str] = Field(..., description="List of AI image generation prompts for this scene")
 
-class StoryListResponse(BaseModel):
-    scenes: List[StoryGeneratorResponse]
-
-
-pydanticParser = PydanticOutputParser(pydantic_object=StoryListResponse)
-def image_generator_prompt(video_summary :str,previous_script:str = ""):
-    template = """
-You are an expert creative video script writer and AI image prompt engineer. 
-Your task is to convert a **summary of a video** into a **cinematic, engaging video script** with visual storytelling. 
-Do **not** copy the summary word-for-word. Instead, rephrase, dramatize, and creatively interpret the content while preserving all key technical points, proper nouns, methods, examples, and workflows.
-
-Instructions:
-
-1️⃣ Scene Creation
-- Break the summary into **logical scenes**.
-- Each scene should include:
-  - **Scene Title**: Short, descriptive, catchy.
-  - **Narration / Dialogue**: Rephrase the summary creatively for narration, dialogue, or monologue.
-  - **Visual Cues**: Describe characters, objects, environment, camera angles, lighting, action, and mood.
-  - **AI Image Prompts**: 2–4 prompts per scene for generating visuals; each prompt should cover different perspectives, styles, or moods of the scene.
-
-2️⃣ Tone and Style
-- Make the script **engaging, cinematic, and story-driven**.
-- Use metaphors, analogies, examples, or illustrative scenarios where appropriate.
-- Introduce emotion, suspense, or humor creatively while staying technically accurate.
-- Preserve the **flow of ideas** from the summary.
-
-3️⃣ Few-Shot Examples
-Example 1:
-Summary snippet: "OpenAI ChatModel converts a generic prompt to a provider-specific request object."
-Scene:
-Scene Title: "The Transformation of the Prompt"
-Narration: "Imagine a universal message magically transforming into a secret code that only OpenAI can understand. The ChatModel, our hero, reshapes this message into the perfect AI request."
-Visual Cues: "Glowing scroll morphing into digital code, futuristic AI interface, cinematic lighting."
-AI Prompts:
-1. "A glowing scroll transforming into digital code, futuristic AI interface, cinematic lighting"
-2. "Fantasy-style magical scroll morphing into futuristic holographic data, neon accents"
-3. "Close-up of hands typing code on floating holographic interface, digital glow"
-4. "Animated sequence showing text transforming into AI-understandable format"
-
-Example 2:
-Summary snippet: "Spring Boot auto-configures OpenAIChatModel and OpenAIChatOption beans."
-Scene:
-Scene Title: "Spring Boot Magic"
-Narration: "Watch as Spring Boot waves its magic wand and instantly, the ChatModel and its options appear, ready for action—no manual setup required!"
-Visual Cues: "Magical sparkles, glowing code snippets, futuristic office background."
-AI Prompts:
-1. "Digital interface appearing magically with glowing sparkles, futuristic office, cinematic style"
-2. "Magic wand casting glowing digital code, AI configuration appearing, bright ambient lighting"
-3. "Futuristic spring-themed UI forming automatically, sparkles and holographic effects"
-4. "Cinematic animation of software components auto-configuring with magical glow"
-
-4️⃣ Output Format
-Return the script as a JSON array, one object per scene:
-
-[
-  {{
-    "scene": "<Scene Title>",
-    "narration": "<Creative narration or dialogue>",
-    "visual_cues": "<Scene visuals, characters, environment, mood>",
-    "prompts": ["<AI image prompt 1>", "<AI image prompt 2>", "<AI image prompt 3>", "<AI image prompt 4>"]
-  }},
-  ...
-]
-
-5️⃣ Processing Instructions
-- Build on any **previous script** if provided to maintain continuity.
-- Ensure **no technical details or important content are lost** while adding creative elements.
-- Avoid repeating the summary verbatim; transform it into cinematic storytelling.
-
-Follow the JSON schema format exactly as described below:
-{format_instruction}
----
-Summary:
-{video_summary}
-Generate the **updated creative video script**, including new scenes and modifications necessary for continuity.
-"""
-    
-    prompt =  PromptTemplate(
-        template=template,
-        input_variables=['video_summary', 'previous_script'],
-        partial_variables={"format_instruction": pydanticParser.get_format_instructions()}
-    )
-    return prompt
-    
-
+# ! Video Script Generator
 def story_generator(summary:str):
-    # try:
+    try:
         llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',google_api_key=settings.GOOGLE_API_KEY , temperature=1.2) 
         prompt = image_generator_prompt(summary)
         formatted_prompt = prompt.format(
         video_summary=summary,
         )
         result = llm.invoke(formatted_prompt)
-        print("---- Raw LLM Output ----")
-        print("\n---- Parsed JSON ----")
         parsed_output = pydanticParser.parse(result.content)
         return parsed_output
-    # except Exception:
-    #     print(Exception)
-    #     print("Somthing went worng in story generator script")    
+    except Exception:
+        print(Exception)
+        print("Somthing went worng in story generator script")    
 
-story_generator("""Here is the updated comprehensive summary based on the provided transcript chunk:
 
-Introduction / Context
 
-   The video features a 22-year-old YouTuber revealing his income, with Ash reacting to this information.
-   A news headline is referenced, stating, "Last month I made 35 LS news headline times of H you are not alone."
-   The speaker is Isan Sharma, who is currently 23 years old.
-   Isan shares his personal transformation journey: he went from being a "broke 18-year-old" in college who knew nothing about life, was deeply underconfident, shy, lacked skills, and "cannot talk to a girl," to a 23-year-old who now interviews billionaires, travels the world, and possesses the financial freedom to support not only himself but also his parents.
-   He describes his story as an "outlier story" that received media attention a couple of weeks prior.
-   The primary purpose of this video is to explain how his experience and the power of content creation can also help the viewer.
-   Isan validates his lessons and steps by sharing his own journey and achievements: in the last 5 years, he has made over 1,000 videos on YouTube and gained over 250 million views.
+# ! Image  Generator
+def image_generate(scenes: List["StoryGeneratorResponse"], output_dir: str) -> List["ImageGeneratorResponse"]:
+    """
+    Generates images via the Nebius AI API, saves them locally, 
+    and returns a list of ImageGeneratorResponse objects with the local path.
+    """
+    generated_scenes_with_images = []
 
-Main Concepts / Ideas
+    # ✅ Ensure output directory exists
+    os.makedirs(output_dir, exist_ok=True)
 
-   Ubiquity of Content Creation: Isan posits that "every around us are content creators." He argues that if someone shares content on Instagram for 48 hours, even if only to a private number of friends, they are a content creator. The key difference lies in sharing content with "everyone out there" rather than a private audience.
-   The True Power of Content Creation (for Isan Sharma): He clarifies that the real benefits for him are not superficial perks like "free business class tickets" or "followers coming around me wanting a picture." Instead, the profound advantages include:
-       The freedom to work from wherever he wants.
-       The freedom to work on whatever he wants.
-       The opportunity to meet "incredible people" that he could never otherwise meet as a 23-year-old.
-   Content Creation as a Modern Career Path: Isan notes a significant shift in career aspirations; while kids traditionally wanted to be astronauts, today they aspire to become content creators. Despite its widespread popularity, he observes that "no one really talks about how do you become a Creator like how can you get started."
-   Accessibility of Content Creation (No Need to be Full-Time): Isan emphasizes that one does not need to be a "full-time Creator." He himself is not a full-time creator; he runs a marketing agency and engages in content creation "on the side."
-       Content creation can be pursued by individuals who are working a job, running a business, or working as a freelancer.
-       The process involves documenting one's journey, sharing lessons learned, and building a personal name or brand for oneself.
-   Addressing the "Nothing to Share" Concern: Isan references an Ali Abdal quote: "what's obvious to you is amazing to others." This means that everyone possesses talents and skills that might seem obvious to them but could be "amazing" or an "eye opener" for others. The goal is to find that one thing and be known for it.
-   Leveraging AI in Content Creation: Creating content alone can feel overwhelming, but "smartest creators" use AI to their advantage. AI can help make the process faster than ever, assisting with:
-       Idea generation.
-       Scripting.
-       Generating crisp audio.
-       AI video.
-       Ultra-realistic images.
-       A free guide by HubSpot, titled "using generative AI to scale your content operations guide," can help viewers get started. This guide contains numerous ways to use AI throughout the content pipeline, from generating unique ideas to helping with research and repurposing content.
-       The guide also highlights various nuances of AI, such as the possibilities of biases in AI-driven content and the risk of plagiarism with generative AI.
-       Isan personally appreciates the part of the guide that delves into various ways to use AI to improve team productivity.
+    try:
+        client = OpenAI(
+            base_url="https://api.studio.nebius.com/v1/",
+            api_key=settings.NEBIUS_API_KEYS
+        )
+    except NameError:
+        print("ERROR: 'settings' or 'settings.NEBIUS_API_KEYS' is not defined.")
+        return []
 
-Steps, Methods, or Workflows
+    asset_counter = 1
 
-   This video is designed to help viewers get started with content creation.
-   Within the "next 10 minutes," Isan plans to share "five very important steps that can help you get to your first YouTube video" and "to your first Instagram real."
-   Step 1: Find Your One Word / Niche
-       The objective is to discover "that one word that your audience can replace your name with" or "what word are you synonymous with."
-       This involves identifying "that one thing that you can specialize over" and that people can relate you with (e.g., about coding, or other specific topics).
-       It is easier to be known for "one thing" than to try "generalize trying to be known for everything out there."
-       Examples of Niche Specialization:
-           Productivity: Ali Abdal
-           Motivation in India: Sandeep Maheshwari
-           Freelancing in India: Isan Sharma
-   Step 2: Forget the Tools and Build the Muscle
-       This step addresses the common tendency for people to wait for "that nice camera, that nice light, that nice background, that nice mic or equipment."
-       Isan emphasizes that "you don't need any of it."
-       Sufficient tools are already available to most viewers: "If you're watching this YouTube video right now you have a laptop or you have a mobile phone or you have a tablet. These are enough tools that you can use to start recording."
-       He advises against needing "fancy equipment."
-       Isan shares his personal experience: his first few videos "were not highly produced" and he "was using a two megapixel front camera of my laptop."
-       The core advice is to "forget the tools," as "no one cares about you," and instead to "just get started, get that foot in the door, just shoot."
-       The focus should be on building the "muscle" to "sit every day in front of a non-living thing called camera and shoot," talking about what you are interested in "every single day."
-       This daily practice of talking to the camera helps build the "muscle" to easily create content.
-       An analogy is provided: "just like a pair of Nike shoes will not turn you into a runner if you yourself don't have that habit, the best tools in the world will not help you become the best Creator if you don't have it inside of you if you have not build that muscle inside."
-   Step 3: Find Your Style
-       Isan observes that many people he meets, whose content (e.g., a reel) he reviews, appear to be "pretending to be someone else" and don't seem "genuine."
-       This lack of genuineness indicates that the person is copying someone else and not being themselves, which is identified as a "big problem."
-       Every major successful creator is an "anomaly," meaning they are "one of zero" or "one of a kind." They all "differentiate themselves."
-       Conversely, "every failed Creator or someone who does not get views is not able to differentiate from the competition."
-       It is crucial to "find out your style." Examples of personal style include:
-           Someone who "loves to talk with typography on the screen" should "do that," showing people how to convey a story with typography.
-           Someone who "loves to just talk and be raw in front of the camera" should "do that."
-       Viewers should not copy successful creators like Mr. Beast, even if he gets "hundreds of millions of views."
-       The advice is to "do what works for you," "do what builds your own authentic Unique Style," and "stop copying."
-       Copying will "never get you to success, especially in the field of content creation," because "it's a zero-sum game."
-       People have limited attention ("only 24 ads") and will "only consume the top 1% creators," so "only they will succeed."
-       Therefore, "you have to stand out." If you do not, you will "end up just becoming one of the many, one of the millions of creators who copy each other and end up becoming mediocre."
-       "Finding your style" encompasses "the way you edit a video, the storytelling that you have, how humorous are you, how serious are you, what language you're talking in." Everything falls "Under the Umbrella of finding your Unique Style."
-   Step 4: Build a Cult
-       This step emphasizes the need to "build a cult," drawing an analogy to past cult leaders who "used to hypnotize Their audience into believing something to be truth."
-       Every successful creator was able to create a cult.
-       In this context, a "cult" refers to "a series of people who are dedicated to a belief or a thought process that you circulate as a Creator."
-       This could be a specific mentality, a particular thought process, an opinion, or a belief that others can relate with.
-       Isan Sharma's personal example of a "hot take" is to "focus more on skills over degrees," stating that "a degree is not going to get you to the right place in life, a skill however can take you places."
-       If an audience member agrees with this belief, they become "a part of my cult" and "carry that belief and hence me and my identity in your heart."
-       These supporters then "sort of become a supporter of this belief and you now try to spread this belief to as many people as possible."
-       The ultimate goal is for the cult to grow on its own, "getting people together, getting people in this community automatically."
-       Isan recommends watching a "brilliant documentary on Netflix which talks about how do you become a cult leader" to learn how it works and apply those learnings to content creation.
+    for scene_data in scenes:
+        # ✅ Skip scenes with no valid prompts
+        if not scene_data.prompts or not scene_data.prompts[0]:
+            print(f"Skipping scene '{scene_data.scene}': No valid prompt provided.")
+            continue
 
-Key Skills for Content Creation
+        prompt_text = scene_data.prompts[0]
+        scene_title_safe = scene_data.scene.replace(' ', '_').replace(':', '')
 
-   Effective Writing: Writing is a foundational skill that creators will "keep coming back to again and again" throughout their entire creation journey, whether for video scripts, reel scripts, or any other content.
-       It is essential for capturing the attention of people with "goldfish memory."
-       Improving writing skills helps people "immediately stick to what you have to say" and encourages them to share the content.
-       Mastering writing, including using "right hooks," telling a "beautiful story," and incorporating the "right CTA" (Call To Action) at the end, is key to success in content creation.
+        # ✅ Avoid Pydantic ValidationError: add image=None
+        scene_dict = scene_data.model_dump()
+        scene_dict["image"] = None
+        scene_with_image = ImageGeneratorResponse(**scene_dict)
 
-Notes, Tips, or Warnings
+        print(f"[{asset_counter}/{len(scenes)}] Generating image for: {scene_data.scene}...")
 
-   Isan is sharing "what took me 5 years to learn in the next 10 minutes," highlighting the condensed value of the information.
-   Patience (Bonus Tip): Content creation requires patience. "Rome was not built in a day," and growth takes time.
-       An analogy is provided with the Chinese bamboo tree, which requires 5 years of consistent daily watering, showing no visible growth. After these 5 years, it then grows 90 feet tall in the next two weeks. This illustrates that consistent effort might not show immediate results but builds a strong foundation, emphasizing that the growth is a result of the full 5 years of effort, not just the two weeks.
-   Content creators must "keep experimenting," "be open to ideas," and "unlearn before you learn."
-   A "free guide by HubSpot that will help you become a better content creator using AI" will be shared for those who watch till the end. This guide is specifically named "HubSpot's using generative AI to scale your content operations guide" and is available via a link in the description.
+        try:
+            # 1️⃣ Generate Image from Nebius AI API
+            response = client.images.generate(
+                model="black-forest-labs/flux-dev",
+                prompt=prompt_text,
+            )
 
-Conclusion
+            # 2️⃣ Extract the Image URL safely
+            image_url = getattr(response.data[0], "url", None)
+            if not image_url:
+                raise ValueError("No image URL returned by Nebius API.")
 
-   The video aims to provide practical guidance and actionable steps for individuals interested in starting their content creation journey, specifically targeting the creation of their initial YouTube video and Instagram reel.
-   The journey to content creation is described as "very simple," involving five steps focused on execution and learning.
-   The ultimate benefits of this journey include impacting millions of people, achieving financial independence, and successfully creating a cult that believes in the creator's core beliefs.
-   Viewers are encouraged to "hit the like button and subscribe" if the content is valuable.
-   Viewers are asked to provide feedback in the comment section if they learned anything from the video.
-   For those who watched till the very end, Isan requests a specific comment: "I watch till the very end."
-   Viewers are also invited to take a screenshot of the video, post it on Instagram, and tag Isan Sharma (@isan Sharma 7390).
-   Isan concludes by stating he will see the audience "again in the next one.""")
+            print(f"  -> API call successful. Downloading image...")
 
+            # 3️⃣ Download and store image locally
+            image_filename = os.path.join(output_dir, f"{asset_counter}_{scene_title_safe}.png")
+            image_response = requests.get(image_url, stream=True)
+            image_response.raise_for_status()
+
+            with open(image_filename, 'wb') as file:
+                for chunk in image_response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+
+            # 4️⃣ Update model with local path
+            scene_with_image.image = image_filename
+            print(f"  -> Image saved: {image_filename}")
+
+        except Exception as e:
+            print(f"  -> ERROR generating/saving image for '{scene_data.scene}': {e}")
+
+        generated_scenes_with_images.append(scene_with_image)
+        asset_counter += 1
+
+    print("\n✅ Image generation phase complete.")
+    return generated_scenes_with_images
+
+
+# !Video Generator
+def video_generation(images: List["ImageGeneratorResponse"], output_dir: str = "generated_videos") -> List["VideoGeneratorResponse"]:
+    """
+    Generates short video clips for each scene using the Veo 3.1 model.
+    Optionally uses a local image reference (from image generation).
+
+    Args:
+        images: List of ImageGeneratorResponse objects containing prompts and image paths.
+        output_dir: Directory where generated video clips will be saved.
+
+    Returns:
+        A list of VideoGeneratorResponse objects with video paths populated.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    videos = []
+
+    for i, image in enumerate(images, 1):
+        uploaded_file = None
+        safe_title = image.scene.replace(" ", "_").replace(":", "")
+        unique_id = str(uuid.uuid4())[:8]
+        output_path = os.path.join(output_dir, f"{i}_{safe_title}_{unique_id}.mp4")
+
+        # Prepare VideoGeneratorResponse base object
+        video_scene = VideoGeneratorResponse(
+            scene=image.scene,
+            narration=image.narration,
+            visual_cues=image.visual_cues,
+            prompts=image.prompts,
+            image=image.image_path,
+            video_path=None,
+        )
+
+        try:
+            # --- 1️⃣ Upload reference image if available ---
+            if image.image_path and os.path.exists(image.image_path):
+                print(f"\n📤 Uploading reference image: {image.image_path}")
+                uploaded_file = client.files.upload(file=image.image_path)
+                print(f"✅ Uploaded reference: {uploaded_file.name}")
+
+            # --- 2️⃣ Configure generation parameters ---
+            config_kwargs = {
+                "duration_seconds": 4,  # typical short cinematic
+                "aspect_ratio": "16:9",
+            }
+            if uploaded_file:
+                config_kwargs["reference_images"] = [uploaded_file]
+            config = types.GenerateVideosConfig(**config_kwargs)
+
+            # --- 3️⃣ Generate video ---
+            print(f"🎬 Generating video for scene: {image.scene}")
+            operation = client.models.generate_videos(
+                model="veo-3.1-generate-preview",
+                prompt=image.visual_cues,
+                config=config,
+            )
+
+            # --- 4️⃣ Poll until video generation completes ---
+            print("⏳ Waiting for video generation (may take a few minutes)...")
+            while not operation.done:
+                print(".", end="", flush=True)
+                time.sleep(10)
+                operation = client.operations.get(operation.name)
+
+            # --- 5️⃣ Download the generated video ---
+            if getattr(operation, "response", None) and getattr(operation.response, "generated_videos", None):
+                generated_video = operation.response.generated_videos[0]
+                client.files.download(file=generated_video.video, output_path=output_path)
+                video_scene.video_path = output_path
+                print(f"\n✅ Video generated and saved: {output_path}")
+            else:
+                print(f"\n❌ Video generation failed for scene: {image.scene}")
+                print(f"Error details: {getattr(operation, 'error', 'No details available')}")
+
+        except Exception as e:
+            print(f"\n🔥 Error generating video for {image.scene}: {e}")
+
+        finally:
+            # --- 6️⃣ Clean up uploaded file ---
+            if uploaded_file:
+                try:
+                    client.files.delete(name=uploaded_file.name)
+                    print(f"🧹 Deleted temporary upload: {uploaded_file.name}")
+                except Exception as cleanup_err:
+                    print(f"⚠️ Cleanup failed: {cleanup_err}")
+
+        videos.append(video_scene)
+
+    print("\n🎥 All videos processed successfully.")
+    return videos
+
+
+# ! Generate Voice
+def generate_voiceover(scenes_with_images: List["VideoGeneratorResponse"], output_dir="voice_overs") -> List["VideoWithVoiceoverResponse"]:
+    """
+    Generates free voiceover using Google Text-to-Speech (gTTS) for all scenes.
+    Returns list of scenes with voiceover paths added.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    scenes_with_voiceovers = []
+    
+    print("\n🎤 Starting Voiceover Generation Phase ---")
+    
+    for i, scene in enumerate(scenes_with_images):
+        tts_path = os.path.join(output_dir, f"{scene.scene.replace(' ', '_').replace(':', '')}.mp3")
+        
+        # Create new response object with voiceover field
+        scene_dict = scene.model_dump()
+        scene_dict["voiceover"] = None
+        scene_with_voiceover = ImageWithVoiceoverResponse(**scene_dict)
+        
+        try:
+            print(f"[{i+1}/{len(scenes_with_images)}] Generating voiceover for scene: {scene.scene}")
+            tts = gTTS(text=scene.narration, lang='en', slow=False)
+            tts.save(tts_path)
+            scene_with_voiceover.voiceover = tts_path
+            print(f"  -> Voiceover saved: {tts_path}")
+        except Exception as e:
+            print(f"  -> ⚠️ Failed to generate voiceover for {scene.scene}: {e}")
+        
+        scenes_with_voiceovers.append(scene_with_voiceover)
+    
+    print("✅ Voiceover generation phase complete.\n")
+    return scenes_with_voiceovers
+
+
+
+WORDS_PER_SECOND = 2.5 
+def assemble_final_video(scenes_with_voiceovers: List[VideoWithVoiceoverResponse], output_file="final_ai_video.mp4", bg_music_path=None):
+    """
+    Assemble final video automatically:
+    - Uses AI-generated video clips
+    - Synchronizes TTS voiceovers
+    - Adds background music (optional)
+    
+    Takes list of scenes with video clips and voiceovers already generated.
+    """
+    final_clips = []
+    audio_segments = []
+    total_time = 0
+
+    print("\n🎬 Starting Final Video Assembly (Video Clips + Narration) ---")
+
+    for i, scene_data in enumerate(scenes_with_voiceovers):
+        video_path = scene_data.video_path
+        if not video_path or not os.path.exists(video_path):
+            # Check for video_path, not image_path
+            print(f"⚠️ Skipping Scene {i+1}: Missing video clip -> {video_path}")
+            continue
+
+        voiceover_path = scene_data.voiceover
+        if not voiceover_path or not os.path.exists(voiceover_path):
+            print(f"⚠️ Skipping Scene {i+1}: No voiceover for scene '{scene_data.scene}'")
+            continue
+
+        # Load narration audio to get duration
+        narration_audio = AudioFileClip(voiceover_path)
+        duration = narration_audio.duration
+
+        # --- FIX 1: Use VideoFileClip to load the generated video clip ---
+        print(f"[{i+1}/{len(scenes_with_voiceovers)}] Adding scene: {scene_data.scene} (duration: {duration:.2f}s)")
+        video_clip = VideoFileClip(video_path)
+        
+        # --- Logic: Set video clip duration to match the narration duration ---
+        # If the narration is longer than the clip (e.g., 4s clip, 7s audio), loop the clip or extend the duration.
+        # Simple solution: Set the video clip duration to the audio duration.
+        # If the video is shorter, moviepy automatically extends the clip by looping the frames or showing the last frame.
+        video_clip = video_clip.with_duration(duration)
+        video_clip = video_clip.set_audio(narration_audio) # Set the primary audio track
+
+        final_clips.append(video_clip)
+
+        # Add narration timing
+        # We add the audio clip (which is now the primary audio for the video_clip)
+        audio_segments.append(narration_audio.with_start(total_time))
+        total_time += duration
+
+    if not final_clips:
+        print("❌ No valid video clips found. Exiting.")
+        return None
+
+    print(f"\n📹 Concatenating {len(final_clips)} video clips...")
+    # Concatenate video clips
+    final_video_clip = concatenate_videoclips(final_clips, method="compose")
+
+    # Merge voiceovers + background music
+    print("🎵 Compositing audio tracks...")
+    
+    # We now only need to composite the background music, as narration is on the video clips
+    if bg_music_path and os.path.exists(bg_music_path):
+        print(f"  -> Adding background music: {bg_music_path}")
+        bg_music = AudioFileClip(bg_music_path).with_volume_scaled(0.25).subclip(0, final_video_clip.duration)
+        # Use CompositeAudioClip to mix the main video audio (narration) with background music
+        # The narration audio from the video clips is accessed via final_video_clip.audio
+        final_audio = CompositeAudioClip([final_video_clip.audio, bg_music])
+        final_video_clip = final_video_clip.set_audio(final_audio)
+    
+    # If no background music, the narration (set via video_clip.set_audio) remains the audio.
+
+    # Export final video
+    print(f"\n🎥 Exporting final video to {output_file} ...")
+    final_video_clip.write_videofile(output_file, fps=24, codec="libx264", audio_codec="aac")
+    print(f"✅ Final video created successfully: {output_file}")
+    print(f"   Total duration: {final_video_clip.duration:.2f} seconds")
+
+    return output_file
+
+
+# ===== COMPLETE PIPELINE FUNCTION =====
+def complete_video_pipeline(story_scenes: List["StoryGeneratorResponse"], output_video_name="final_ai_video.mp4"):
+    """
+    Complete pipeline: 
+    Story Scripts → Reference Images (Nebius) → Video Clips (Veo) → Voiceovers → Final Video Assembly
+
+    Args:
+        story_scenes: List of StoryGeneratorResponse objects from story_generator()
+        output_video_name: Name of the final output video file
+
+    Returns:
+        Path to the final assembled video
+    """
+    print("=" * 60)
+    print("🚀 STARTING COMPLETE VIDEO GENERATION PIPELINE (Veo Enabled)")
+    print("=" * 60)
+
+    # --- Step 1: Generate Reference Images (Nebius/Flux) ---
+    # These images are used as visual cues or references for the Veo model.
+    print("\n📸 STEP 1: Generating reference images for all scenes (using Nebius/Flux)...")
+    scenes_with_images = image_generate(scenes=story_scenes, output_dir=OUTPUT_DIR)
+
+    if not scenes_with_images:
+        print("❌ No images generated. Aborting pipeline.")
+        return None
+
+    # --- Step 2: Generate Video Clips (Veo 3.1) ---
+    # The Veo function uses the prompts/images from the previous step to create video clips.
+    # We must define a new directory for the videos to avoid mixing with reference images.
+    VIDEO_CLIPS_DIR = "generated_videos" 
+    os.makedirs(VIDEO_CLIPS_DIR, exist_ok=True)
+    print(f"\n🎥 STEP 2: Generating video clips for all scenes (using Veo 3.1 in {VIDEO_CLIPS_DIR})...")
+    scenes_with_videos = video_generation(
+        images=scenes_with_images, 
+        output_dir=VIDEO_CLIPS_DIR
+    )
+
+    if not scenes_with_videos:
+        print("❌ No video clips generated. Aborting pipeline.")
+        return None
+
+    # --- Step 3: Generate Voiceovers (gTTS) ---
+    # The voiceover function now takes the list of scenes WITH video paths.
+    print("\n🎤 STEP 3: Generating voiceovers for all scenes...")
+    # NOTE: generate_voiceover now expects VideoGeneratorResponse objects (which contain video_path)
+    scenes_with_voiceovers = generate_voiceover(scenes_with_videos=scenes_with_videos)
+
+    if not scenes_with_voiceovers:
+        print("❌ No voiceovers generated. Aborting pipeline.")
+        return None
+
+    # --- Step 4: Assemble Final Video (MoviePy) ---
+    print("\n🎬 STEP 4: Assembling final video from video clips and voiceovers...")
+
+    final_video_path = assemble_final_video(
+        scenes_with_voiceovers=scenes_with_voiceovers,
+        output_file=output_video_name
+    )
+
+    print("\n" + "=" * 60)
+    if final_video_path:
+        print("PIPELINE COMPLETE!")
+        print(f"Final video: {final_video_path}")
+    else:
+        print("Pipeline failed to create video.")
+    print("=" * 60)
+
+    return final_video_path
+
+# Generate story from video summary
+video_summary = transcript_generator(videoId="-XFmbnGtCas")
+story_response = story_generator(summary=video_summary)
+print(story_response.model_dump_json(indent=2))
+
+
+# Run complete pipeline 
+final_video = complete_video_pipeline(story_scenes=story_response.scenes, output_video_name="my_video.mp4")
+
+    # scenes=[StoryGeneratorResponse(scene='The Genesis of Thought', narration="We've carefully crafted the fundamental blocks: intricate messages, specific chat options, and the universal prompt. But a profound truth lingers: our eloquently constructed prompt, while understood by our system, remains an alien whisper to the formidable digital titans like OpenAI or Anthropic. Our true quest, our bridge-building endeavor, culminates in the ChatModel. This intelligent interpreter takes our raw intention, meticulously shapes it into the precise dialect each AI comprehends, and launches it into the digital ether. It's a marvel of seamless integration, gracefully manifesting its specific form within our Spring framework based on the very foundations of our project's dependencies.", visual_cues="A programmer, deep in thought, surrounded by glowing lines of code. The generic 'prompt' appears as a luminous orb, floating mystically. As narration mentions AI providers, stylized icons for OpenAI, Anthropic, and Mistral AI flicker into existence around the orb. The 'ChatModel' interface appears as a ghostly blueprint, then solidifies into a specific implementation like 'OpenAIChatModel' depending on a 'pom.xml' snippet. Focus on transformation and connectivity, futuristic workspace, low-key lighting.", prompts=["A glowing, generic prompt orb transforming into specific AI provider symbols (OpenAI, Anthropic, Mistral AI), with a 'ChatModel' blueprint materializing from code lines in a futuristic coding environment. Cinematic lighting, deep focus, digital art."]), StoryGeneratorResponse(scene='The Polyglot Gatekeepers', narration="Imagine an elite assembly of specialized translators, each possessing perfect fluency in the unique tongue of a specific AI giant. These are our concrete ChatModel implementations: the `OpenAIChatModel`, the `AnthropicChatModel`, and the `MistralAIChatModel`, among others. Each stands as a dedicated guardian, taking that universally understood prompt and meticulously sculpting it into the exact request object their particular AI demands. They don't just translate; they possess the inherent knowledge of *how* to knock on the right digital door, *which* specific API to call, and how to patiently await the `ChatResponse`—the AI's insightful reply. And should you choose not to articulate specific preferences, worry not, for they are designed to gracefully defer to wise default options.", visual_cues="A row of distinct, stylized AI portals (one for OpenAI, one for Anthropic, etc.), each glowing with a unique color scheme. Each portal is guarded by a cloaked, enigmatic figure representing its specific 'ChatModel' implementation. A generic prompt symbol, pulsating with energy, moves towards the OpenAI guardian, who then expertly crafts a glowing, OpenAI-specific request object before sending it into the portal. Emphasize specificity, responsibility, and arcane digital craftsmanship.", prompts=['A row of futuristic, stylized AI portals (OpenAI, Anthropic, Mistral AI), each guarded by a distinct cloaked figure with glowing eyes. A generic glowing data packet approaches, and an OpenAI guardian transforms it into a complex, provider-specific data structure before launching it into the OpenAI portal. Cinematic, digital art, high contrast.']), StoryGeneratorResponse(scene="The Solo Maestro's Symphony", narration="Let's witness the elegant flow when our system speaks primarily to one intelligence. From a simple `/api/ai/chat` endpoint, a discreet whisper in our controller reaches the ears of our service. Here, the `ChatModel` patiently awaits, seamlessly woven into the fabric of our application by Spring Boot’s benevolent, auto-configuration hand. If OpenAI is our sole confidant, Spring will unfailingly present the `OpenAIChatModel`, ready to orchestrate our list of messages, configure nuanced options like temperature and token limits, and bundle them into a comprehensive `Prompt` object. With a swift invocation, `chatModel.call(prompt)`, our message embarks on its journey, silently translated and conveyed, returning an eloquent `ChatResponse`.", visual_cues="A sleek visual representation of an API call flowing from a web browser interface, through a minimalist controller screen, into a service method represented by a focused processing core. A single, illuminated 'OpenAIChatModel' object glows prominently as it's injected. Data packets representing 'List<Message>' and 'ChatOption' converge and morph to form a unified, shimmering 'Prompt' object. The 'Prompt' then swiftly moves towards the 'OpenAIChatModel', which emits a vibrant 'ChatResponse' back to the service. Clean, flowing animation of data, tech aesthetic.", prompts=["An animated data flow showing a request from a futuristic browser interface to a minimalist controller, then to a Spring Boot service core. A glowing 'OpenAIChatModel' bean is seamlessly injected, receiving input messages and options, bundling them into a vibrant 'Prompt' object, and generating a dynamic 'ChatResponse'. High-tech, seamless motion graphics."]), StoryGeneratorResponse(scene='The Conclave of Cognition', narration="But what if our ambition stretches further, embracing a diverse council of intelligences? When your `pom.xml` proudly houses both OpenAI and Anthropic dependencies, Spring, ever so generous, meticulously prepares beans for *both* `OpenAIChatModel` and `AnthropicChatModel`. This generosity, however, creates a delightful dilemma: which `ChatModel` to inject when a generic request arrives? Spring cannot simply guess. This is where clarity and precision prevail. With the sacred `@Qualifier` annotation, we explicitly instruct Spring, naming our desired agent—be it `openAIChatModel` or `anthropicChatModel`. Our application's pathways, too, must diverge: a distinct endpoint for OpenAI, another for Anthropic, each channeling requests to their designated, expertly qualified AI companion.", visual_cues="Two distinct, glowing 'ChatModel' beans (one labeled 'OpenAI', one 'Anthropic') appear side-by-side on a futuristic console, causing a shimmering 'conflict' icon to pulse between them. A developer's hand inputs code snippets onto the console, showing `@Qualifier` annotations appearing next to variable declarations, resolving the conflict. Simultaneously, two separate API routes (visualized as distinct, branching digital pathways) emerge from the console, each leading to its respective AI model, glowing with unique identifier colors. Emphasize choice, precision, and strategic programming.", prompts=["Two glowing AI ChatModel beans (OpenAIChatModel, AnthropicChatModel) on a futuristic console, causing a shimmering conflict symbol to pulse. Code showing '@Qualifier' annotations appears to resolve the ambiguity. Two separate digital pathways (API routes) emerge, each leading to its distinct AI provider. High-tech, conceptual art, dynamic light."]), StoryGeneratorResponse(scene="The Oracle's Many Tongues", narration="The `ChatModel` interface itself is a virtuoso, a master of many voices and entry points. It offers a `call(String)` method, a simpler path where you merely whisper a query like 'What is Java?' The model, in its wisdom, silently crafts a `Prompt` and engages the AI. Then there’s `call(List<Message>)`, designed for richer, multi-turn conversations, accepting a tapestry of thoughts. Yet, at the very core of every specific ChatModel implementation lies the abstract `call(Prompt)` method. This is where the magic truly happens—the crucible where our comprehensive `Prompt`, carrying all its messages and options, is finally transmuted into an AI-specific request, the ultimate invocation to the digital oracle, and the awaited `ChatResponse` emerges.", visual_cues="A majestic, ancient-looking 'ChatModel' interface symbol, carved from digital light, with three glowing conduits extending from it, representing `call(String)`, `call(List<Message>)`, and `call(Prompt)`. The `call(String)` conduit shows a simple text input transforming into a complex 'Prompt' object within. The `call(List<Message>)` conduit shows multiple flowing message streams merging into a 'Prompt'. The central `call(Prompt)` conduit highlights intricate internal conversion processes, showing data morphing, leading to an external API call and a radiant 'ChatResponse' appearing at its end. Mythical, magical tech, glowing runes.", prompts=["A majestic, ancient-looking 'ChatModel' interface symbol carved from digital light, with three glowing conduits: one showing simple text transforming into a 'Prompt', another showing a list of messages merging into a 'Prompt', and the central conduit depicting intricate internal data conversion of the 'Prompt' into an AI-specific request, culminating in a radiant 'ChatResponse'. Mythical tech, glowing runes, cinematic."]), StoryGeneratorResponse(scene='The Proving Grounds', narration="With our multi-faceted ChatModels deployed and meticulously configured, the true test of their capabilities begins. Imagine making a crucial call to Anthropic, only to receive a stark 'insufficient credit' error – a poignant testament that our application successfully connected, but met a real-world financial barrier. Then, with a swift pivot, a simple 'Hello, how are you?' sent to OpenAI, and instantaneously, a warm, intelligent response flows back. This isn't mere theory; it's a live symphony of integration, demonstrating the undeniable power to seamlessly switch between the titans of AI, each configured with its unique keys, each answering to its designated ChatModel. The stage is now perfectly set for next time, when we delve into the profound secrets held within that `ChatResponse` itself.", visual_cues="A dynamic split-screen showing two distinct command-line terminals. On one, an Anthropic API call command is executed, swiftly returning a stark 'Insufficient credit' error message that pulses with a vibrant red glow. On the other, an OpenAI API call command is executed, and within moments, a successful, friendly AI response appears, glowing with a serene green light. A confident programmer leans back, a subtle smile playing on their lips, acknowledging the success. The scene then transitions, focusing on a highly detailed, glowing 'ChatResponse' icon, hinting at the next episode. Cinematic, high-tech aesthetic.", prompts=["Split screen showing two distinct command-line interfaces: one displaying a 'connection denied/insufficient credit' error message for Anthropic AI (pulsing red glow), the other displaying a successful, friendly AI response from OpenAI (serene green glow). A confident developer in the background, subtly smiling. Futuristic tech office, cinematic lighting, high-contrast."])]
+    # ,output_dir=OUTPUT_DIR))
+
+
+
+
+
+# print(assemble_final_video([ImageGeneratorResponse(scene='The Genesis of Thought', narration="We've carefully crafted the fundamental blocks: intricate messages, specific chat options, and the universal prompt. But a profound truth lingers: our eloquently constructed prompt, while understood by our system, remains an alien whisper to the formidable digital titans like OpenAI or Anthropic. Our true quest, our bridge-building endeavor, culminates in the ChatModel. This intelligent interpreter takes our raw intention, meticulously shapes it into the precise dialect each AI comprehends, and launches it into the digital ether. It's a marvel of seamless integration, gracefully manifesting its specific form within our Spring framework based on the very foundations of our project's dependencies.", visual_cues="A programmer, deep in thought, surrounded by glowing lines of code. The generic 'prompt' appears as a luminous orb, floating mystically. As narration mentions AI providers, stylized icons for OpenAI, Anthropic, and Mistral AI flicker into existence around the orb. The 'ChatModel' interface appears as a ghostly blueprint, then solidifies into a specific implementation like 'OpenAIChatModel' depending on a 'pom.xml' snippet. Focus on transformation and connectivity, futuristic workspace, low-key lighting.", prompts=["A glowing, generic prompt orb transforming into specific AI provider symbols (OpenAI, Anthropic, Mistral AI), with a 'ChatModel' blueprint materializing from code lines in a futuristic coding environment. Cinematic lighting, deep focus, digital art."], image='nebius_scene_images/1_The_Genesis_of_Thought.png'), ImageGeneratorResponse(scene='The Polyglot Gatekeepers', narration="Imagine an elite assembly of specialized translators, each possessing perfect fluency in the unique tongue of a specific AI giant. These are our concrete ChatModel implementations: the `OpenAIChatModel`, the `AnthropicChatModel`, and the `MistralAIChatModel`, among others. Each stands as a dedicated guardian, taking that universally understood prompt and meticulously sculpting it into the exact request object their particular AI demands. They don't just translate; they possess the inherent knowledge of *how* to knock on the right digital door, *which* specific API to call, and how to patiently await the `ChatResponse`—the AI's insightful reply. And should you choose not to articulate specific preferences, worry not, for they are designed to gracefully defer to wise default options.", visual_cues="A row of distinct, stylized AI portals (one for OpenAI, one for Anthropic, etc.), each glowing with a unique color scheme. Each portal is guarded by a cloaked, enigmatic figure representing its specific 'ChatModel' implementation. A generic prompt symbol, pulsating with energy, moves towards the OpenAI guardian, who then expertly crafts a glowing, OpenAI-specific request object before sending it into the portal. Emphasize specificity, responsibility, and arcane digital craftsmanship.", prompts=['A row of futuristic, stylized AI portals (OpenAI, Anthropic, Mistral AI), each guarded by a distinct cloaked figure with glowing eyes. A generic glowing data packet approaches, and an OpenAI guardian transforms it into a complex, provider-specific data structure before launching it into the OpenAI portal. Cinematic, digital art, high contrast.'], image='nebius_scene_images/2_The_Polyglot_Gatekeepers.png'), ImageGeneratorResponse(scene="The Solo Maestro's Symphony", narration="Let's witness the elegant flow when our system speaks primarily to one intelligence. From a simple `/api/ai/chat` endpoint, a discreet whisper in our controller reaches the ears of our service. Here, the `ChatModel` patiently awaits, seamlessly woven into the fabric of our application by Spring Boot’s benevolent, auto-configuration hand. If OpenAI is our sole confidant, Spring will unfailingly present the `OpenAIChatModel`, ready to orchestrate our list of messages, configure nuanced options like temperature and token limits, and bundle them into a comprehensive `Prompt` object. With a swift invocation, `chatModel.call(prompt)`, our message embarks on its journey, silently translated and conveyed, returning an eloquent `ChatResponse`.", visual_cues="A sleek visual representation of an API call flowing from a web browser interface, through a minimalist controller screen, into a service method represented by a focused processing core. A single, illuminated 'OpenAIChatModel' object glows prominently as it's injected. Data packets representing 'List<Message>' and 'ChatOption' converge and morph to form a unified, shimmering 'Prompt' object. The 'Prompt' then swiftly moves towards the 'OpenAIChatModel', which emits a vibrant 'ChatResponse' back to the service. Clean, flowing animation of data, tech aesthetic.", prompts=["An animated data flow showing a request from a futuristic browser interface to a minimalist controller, then to a Spring Boot service core. A glowing 'OpenAIChatModel' bean is seamlessly injected, receiving input messages and options, bundling them into a vibrant 'Prompt' object, and generating a dynamic 'ChatResponse'. High-tech, seamless motion graphics."], image="nebius_scene_images/3_The_Solo_Maestro's_Symphony.png"), ImageGeneratorResponse(scene='The Conclave of Cognition', narration="But what if our ambition stretches further, embracing a diverse council of intelligences? When your `pom.xml` proudly houses both OpenAI and Anthropic dependencies, Spring, ever so generous, meticulously prepares beans for *both* `OpenAIChatModel` and `AnthropicChatModel`. This generosity, however, creates a delightful dilemma: which `ChatModel` to inject when a generic request arrives? Spring cannot simply guess. This is where clarity and precision prevail. With the sacred `@Qualifier` annotation, we explicitly instruct Spring, naming our desired agent—be it `openAIChatModel` or `anthropicChatModel`. Our application's pathways, too, must diverge: a distinct endpoint for OpenAI, another for Anthropic, each channeling requests to their designated, expertly qualified AI companion.", visual_cues="Two distinct, glowing 'ChatModel' beans (one labeled 'OpenAI', one 'Anthropic') appear side-by-side on a futuristic console, causing a shimmering 'conflict' icon to pulse between them. A developer's hand inputs code snippets onto the console, showing `@Qualifier` annotations appearing next to variable declarations, resolving the conflict. Simultaneously, two separate API routes (visualized as distinct, branching digital pathways) emerge from the console, each leading to its respective AI model, glowing with unique identifier colors. Emphasize choice, precision, and strategic programming.", prompts=["Two glowing AI ChatModel beans (OpenAIChatModel, AnthropicChatModel) on a futuristic console, causing a shimmering conflict symbol to pulse. Code showing '@Qualifier' annotations appears to resolve the ambiguity. Two separate digital pathways (API routes) emerge, each leading to its distinct AI provider. High-tech, conceptual art, dynamic light."], image='nebius_scene_images/4_The_Conclave_of_Cognition.png'), ImageGeneratorResponse(scene="The Oracle's Many Tongues", narration="The `ChatModel` interface itself is a virtuoso, a master of many voices and entry points. It offers a `call(String)` method, a simpler path where you merely whisper a query like 'What is Java?' The model, in its wisdom, silently crafts a `Prompt` and engages the AI. Then there’s `call(List<Message>)`, designed for richer, multi-turn conversations, accepting a tapestry of thoughts. Yet, at the very core of every specific ChatModel implementation lies the abstract `call(Prompt)` method. This is where the magic truly happens—the crucible where our comprehensive `Prompt`, carrying all its messages and options, is finally transmuted into an AI-specific request, the ultimate invocation to the digital oracle, and the awaited `ChatResponse` emerges.", visual_cues="A majestic, ancient-looking 'ChatModel' interface symbol, carved from digital light, with three glowing conduits extending from it, representing `call(String)`, `call(List<Message>)`, and `call(Prompt)`. The `call(String)` conduit shows a simple text input transforming into a complex 'Prompt' object within. The `call(List<Message>)` conduit shows multiple flowing message streams merging into a 'Prompt'. The central `call(Prompt)` conduit highlights intricate internal conversion processes, showing data morphing, leading to an external API call and a radiant 'ChatResponse' appearing at its end. Mythical, magical tech, glowing runes.", prompts=["A majestic, ancient-looking 'ChatModel' interface symbol carved from digital light, with three glowing conduits: one showing simple text transforming into a 'Prompt', another showing a list of messages merging into a 'Prompt', and the central conduit depicting intricate internal data conversion of the 'Prompt' into an AI-specific request, culminating in a radiant 'ChatResponse'. Mythical tech, glowing runes, cinematic."], image="nebius_scene_images/5_The_Oracle's_Many_Tongues.png"), ImageGeneratorResponse(scene='The Proving Grounds', narration="With our multi-faceted ChatModels deployed and meticulously configured, the true test of their capabilities begins. Imagine making a crucial call to Anthropic, only to receive a stark 'insufficient credit' error – a poignant testament that our application successfully connected, but met a real-world financial barrier. Then, with a swift pivot, a simple 'Hello, how are you?' sent to OpenAI, and instantaneously, a warm, intelligent response flows back. This isn't mere theory; it's a live symphony of integration, demonstrating the undeniable power to seamlessly switch between the titans of AI, each configured with its unique keys, each answering to its designated ChatModel. The stage is now perfectly set for next time, when we delve into the profound secrets held within that `ChatResponse` itself.", visual_cues="A dynamic split-screen showing two distinct command-line terminals. On one, an Anthropic API call command is executed, swiftly returning a stark 'Insufficient credit' error message that pulses with a vibrant red glow. On the other, an OpenAI API call command is executed, and within moments, a successful, friendly AI response appears, glowing with a serene green light. A confident programmer leans back, a subtle smile playing on their lips, acknowledging the success. The scene then transitions, focusing on a highly detailed, glowing 'ChatResponse' icon, hinting at the next episode. Cinematic, high-tech aesthetic.", prompts=["Split screen showing two distinct command-line interfaces: one displaying a 'connection denied/insufficient credit' error message for Anthropic AI (pulsing red glow), the other displaying a successful, friendly AI response from OpenAI (serene green glow). A confident developer in the background, subtly smiling. Futuristic tech office, cinematic lighting, high-contrast."], image='nebius_scene_images/6_The_Proving_Grounds.png')]))
