@@ -11,4 +11,4 @@ class User(SQLModel,table=True):
     refreshToken:Optional[str] = None
     created_at:datetime = Field(default_factory=datetime.utcnow,nullable=False)
     updated_at: Optional[datetime] = Field(default=None, sa_column_kwargs={"onupdate": datetime.utcnow})
-    video_sessions:List["VideoSession"] = Relationship(back_populates="user")
+    # video_sessions:List["VideoSession"] = Relationship(back_populates="user")
