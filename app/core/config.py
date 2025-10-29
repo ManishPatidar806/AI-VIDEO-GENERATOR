@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     SENTRY_DNS:str| None=None
     ALLOWED_HOSTS:list[str]=["*"]
     DATABASE_URL:str
+    # JWT_SECRET:str
+    # JWT_ALGORITHM:str
     
 
     class Config:
