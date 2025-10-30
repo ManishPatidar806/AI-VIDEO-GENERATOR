@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS:list[str]=["*"]
     DATABASE_URL:str
     NEBIUS_API_KEYS:str
-    # JWT_SECRET:str
-    # JWT_ALGORITHM:str
+    JWT_SECRET:str
+    JWT_ALGORITHM:str
     
 
     class Config:
