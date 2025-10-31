@@ -18,6 +18,7 @@ class UserBase(BaseModel):
 
 # Signup Model (for registration)
 class UserSignup(UserBase):
+
     name: Annotated[
         str,
         Field(
@@ -28,7 +29,6 @@ class UserSignup(UserBase):
             example="Ravi Kumar"
         )
     ]
-
 
 
     password: Annotated[
@@ -45,15 +45,6 @@ class UserSignup(UserBase):
 
 # Login Model (for authentication)
 class UserLogin(UserBase):
-    # email: Annotated[
-    #     EmailStr,
-    #     Field(
-    #         max_length=120,
-    #         title="Email Address",
-    #         description="Registered email used for login.",
-    #         example="user@example.com"
-    #     )
-    # ]
 
     password: Annotated[
         str,
@@ -110,31 +101,8 @@ class UserRead(UserBase):
         from_attributes = True
 
 
-# Optional: Token Response Model (after login/signup)
-class TokenResponse(BaseModel):
-    # access_token: Annotated[
-    #     str,
-    #     Field(
-    #         title="Access Token",
-    #         description="JWT access token for authenticated requests.",
-    #         example="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-    #     )
-    # ]
-
-    refresh_token: Annotated[
-        Optional[str],
-        Field(
-            default=None,
-            title="Refresh Token",
-            description="Token used to refresh authentication when access token expires.",
-            example="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-        )
-    ]= None
-
-
 
 # Extended Model with Related Data
-# -----------------------------------------
 class UserWithSessions(UserRead):
     video_sessions: Annotated[
         List["VideoSessionRead"],  

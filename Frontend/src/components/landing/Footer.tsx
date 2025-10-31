@@ -198,7 +198,7 @@ export const Footer = () => {
               © {currentYear} AI Video Creator. All rights reserved.
             </p>
             <p className="flex items-center gap-2">
-              Made with{" "}
+              Generate{" "}
               <motion.span
                 animate={{ scale: [1, 1.2, 1] }}
                 transition={{ duration: 1, repeat: Infinity }}
@@ -206,7 +206,7 @@ export const Footer = () => {
               >
                 ♥
               </motion.span>{" "}
-              using AI
+              Video
             </p>
           </div>
         </motion.div>

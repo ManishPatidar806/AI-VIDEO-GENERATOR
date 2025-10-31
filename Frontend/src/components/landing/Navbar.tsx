@@ -72,7 +72,7 @@ export const Navbar = () => {
                   Dashboard
                 </Button>
                 <Button
-                  onClick={() => navigate("/pipeline")}
+                  onClick={() => navigate("/dashboard")}
                   className="bg-gradient-to-r from-primary via-accent to-[hsl(270,60%,65%)] text-white font-medium shadow-lg hover:shadow-xl transition-all"
                 >
                   Create Video
@@ -151,7 +151,7 @@ export const Navbar = () => {
                     <Button
                       onClick={() => {
                         setIsMenuOpen(false);
-                        navigate("/pipeline");
+                        navigate("/dashboard");
                       }}
                       className="w-full bg-gradient-to-r from-primary via-accent to-[hsl(270,60%,65%)] text-white font-medium"
                     >

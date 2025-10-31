@@ -6,7 +6,7 @@ import { Star, Quote } from "lucide-react";
 const testimonials = [
   {
     id: 1,
-    name: "Sarah Chen",
+    name: "Shreya Gupta",
     role: "Content Creator",
     avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop",
     rating: 5,
@@ -14,7 +14,7 @@ const testimonials = [
   },
   {
     id: 2,
-    name: "Michael Rodriguez",
+    name: "Rohit Shrivastav",
     role: "Marketing Director",
     avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop",
     rating: 5,
@@ -22,7 +22,7 @@ const testimonials = [
   },
   {
     id: 3,
-    name: "Emily Watson",
+    name: "Isha Morgan",
     role: "Educator & YouTuber",
     avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop",
     rating: 5,

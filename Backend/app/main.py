@@ -24,7 +24,7 @@ def create_app()->FastAPI:
     def root():
         return {"message": f"{settings.APP_NAME} is running!"}
 
-    app.include_router(router=auth_router.router,prefix="/api/v1/auth",tags=["auth"])
+    app.include_router(router=auth_router.router,prefix="/api/v1",tags=["auth"])
     app.include_router(router=transcript_generate_route.router, prefix="/api/v1/generate", 
     tags=["Generator"])
     app.include_router(router=transcript_regenerate_route.router, prefix="/api/v1/regenerate", 
@@ -50,9 +50,11 @@ def create_app()->FastAPI:
     
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        # allow_origins=["*"],
         allow_methods=["*"],
-        allow_headers=["*"]
+        allow_headers=["*"],
+        allow_origins=["http://localhost:8080"],  # your frontend URL
+        allow_credentials=True,  # required for cookies
         )
 
     return app

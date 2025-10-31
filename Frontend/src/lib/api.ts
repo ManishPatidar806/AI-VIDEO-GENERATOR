@@ -1,59 +1,56 @@
-import axios from 'axios';
+import axios,{ AxiosRequestConfig } from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true, 
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
 // Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+// api.interceptors.request.use(
+//   (config) => {
+//     const token = localStorage.getItem('auth_token');
+//     if (token) {
+//       config.headers.Authorization = `Bearer ${token}`;
+//     }
+//     return config;
+//   },
+//   (error) => Promise.reject(error)
+// );
 
-// Response interceptor for error handling
+
+
+// Interceptor for handling expired access tokens
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Extract the error message from backend
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      const errorMessage = error.response.data?.detail || 
-                          error.response.data?.message || 
-                          error.response.statusText ||
-                          'An error occurred';
-      
-      // Create a more informative error object
-      error.message = errorMessage;
-      
-      // Handle unauthorized errors
-      if (error.response.status === 401) {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user');
-        window.location.href = '/auth';
-      }
-    } else if (error.request) {
-      // The request was made but no response was received
-      error.message = 'No response from server. Please check your connection.';
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      error.message = error.message || 'An unexpected error occurred';
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Prevent infinite loop — don’t retry refresh itself
+    if (originalRequest?.url?.includes('/auth/refresh')) {
+      return Promise.reject(error);
     }
-    
+
+    // Handle access token expiration
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        console.log('🔄 Trying to refresh token...');
+      } catch (refreshError) {
+        console.warn('❌ Refresh failed — redirecting to login');
+        window.location.href = '/auth';
+        return Promise.reject(refreshError);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
+
 
 // Utility function to extract video ID from YouTube URL
 const extractYouTubeVideoId = (url: string): string => {
@@ -88,6 +85,10 @@ export const authApi = {
     api.post('/api/v1/auth/signup', data),
   login: (data: { email: string; password: string }) =>
     api.post('/api/v1/auth/login', data),
+  logout: () =>
+     api.post('/api/v1/auth/logout'), // optional logout endpoint
+  me: () => 
+    api.get('/api/v1/auth/me'), // fetch current logged-in user
 };
 
 // Transcript endpoints
