@@ -10,7 +10,7 @@ export const Hero = () => {
 
   const handleGetStarted = () => {
     if (user) {
-      navigate("/pipeline");
+      navigate("/dashboard");
     } else {
       navigate("/auth?mode=signup");
     }

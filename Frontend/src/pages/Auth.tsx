@@ -6,11 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const navigate = useNavigate();
   const { user, login, signup } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [signupData, setSignupData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
 
@@ -35,9 +37,25 @@ export default function Auth() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (signupData.password !== signupData.confirmPassword) {
+
+     if (signupData.password !== signupData.confirmPassword) {
+      toast({
+        title: 'Signup failed',
+        description: 'Passwords do not match',
+        variant: 'destructive',
+      });
       return;
     }
+
+    if (signupData.password.length < 8) { 
+      toast({
+        title: 'Signup failed',
+        description: 'Password must be at least 8 characters',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       await signup(signupData.email, signupData.password, signupData.name);
