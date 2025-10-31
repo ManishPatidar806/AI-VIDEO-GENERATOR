@@ -83,6 +83,11 @@ export default function CompletePipeline() {
       
       const response = await pipelineApi.runComplete({ youtube_url: youtubeUrl });
       
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Pipeline failed");
+      }
+      
       // Mark remaining stages as complete after API success
       for (let i = 1; i < stages.length; i++) {
         updateProgress(i);

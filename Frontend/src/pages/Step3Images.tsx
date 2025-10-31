@@ -69,6 +69,11 @@ export default function Step3Images() {
       
       const response = await imageApi.generate({ story_data: storyScenes });
       
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to generate images");
+      }
+      
       // Backend returns: { success, message, data: { images: [...] }, status_code }
       // Axios puts it in response.data, so we access response.data.data.images
       const responseData = response.data.data || response.data;
@@ -144,6 +149,11 @@ export default function Step3Images() {
       };
       
       const response = await imageApi.regenerate({ scene_data: sceneData });
+      
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to regenerate image");
+      }
       
       // Backend returns: { success, message, data: { image: "...", ... }, status_code }
       // Axios puts it in response.data, so we access response.data.data.image
@@ -225,6 +235,11 @@ export default function Step3Images() {
         scene_data: sceneData,
         user_input: userInput
       });
+      
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to modify image");
+      }
       
       const responseData = response.data.data || response.data;
       let imageUrl = responseData.image || responseData.url || responseData.image_url || "";

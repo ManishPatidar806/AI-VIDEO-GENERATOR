@@ -46,12 +46,6 @@ def regenerate_story(request: RegenerateStoryRequest):
             existing_story=existing_story_obj
         )
         
-        if regenerated_story is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Story regeneration failed"
-            )
-        
         logger.info(f"Story regenerated with {len(regenerated_story.scenes)} scenes")
         return APIResponse(
             success=True,
@@ -59,13 +53,13 @@ def regenerate_story(request: RegenerateStoryRequest):
             data=regenerated_story.model_dump(),
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error regenerating story: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to regenerate story: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to regenerate story: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -88,12 +82,6 @@ def regenerate_scenes(request: RegenerateSpecificScenesRequest):
             summary=request.summary
         )
         
-        if updated_story is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Scene regeneration failed"
-            )
-        
         logger.info(f"Successfully regenerated {len(request.scene_indices)} scenes")
         return APIResponse(
             success=True,
@@ -101,13 +89,13 @@ def regenerate_scenes(request: RegenerateSpecificScenesRequest):
             data=updated_story.model_dump(),
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error regenerating specific scenes: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to regenerate scenes: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to regenerate scenes: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -127,12 +115,6 @@ def regenerate_image(request: RegenerateSingleImageRequest):
             output_dir=request.output_dir
         )
         
-        if new_image is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Image regeneration failed"
-            )
-        
         logger.info(f"Image regenerated: {new_image.image}")
         return APIResponse(
             success=True,
@@ -140,13 +122,13 @@ def regenerate_image(request: RegenerateSingleImageRequest):
             data=new_image.model_dump(),
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error regenerating image: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to regenerate image: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to regenerate image: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -166,12 +148,6 @@ def regenerate_video(request: RegenerateSingleVideoRequest):
             output_dir=request.output_dir
         )
         
-        if new_video is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Video regeneration failed"
-            )
-        
         logger.info(f"Video regenerated: {new_video.video_path}")
         return APIResponse(
             success=True,
@@ -179,13 +155,13 @@ def regenerate_video(request: RegenerateSingleVideoRequest):
             data=new_video.model_dump(),
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error regenerating video: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to regenerate video: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to regenerate video: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -206,12 +182,6 @@ def regenerate_voiceover(request: RegenerateSingleVoiceoverRequest):
             output_dir=request.output_dir
         )
         
-        if new_voiceover is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Voiceover regeneration failed"
-            )
-        
         logger.info(f"Voiceover regenerated: {new_voiceover.voiceover}")
         return APIResponse(
             success=True,
@@ -219,13 +189,13 @@ def regenerate_voiceover(request: RegenerateSingleVoiceoverRequest):
             data=new_voiceover.model_dump(),
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error regenerating voiceover: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to regenerate voiceover: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to regenerate voiceover: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
