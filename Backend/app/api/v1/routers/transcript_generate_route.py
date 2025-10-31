@@ -9,7 +9,7 @@ from app.ml.model_connect import (
     complete_video_pipeline,
 
 )
-from app.schemas.api_response import APIResponse
+from app.schemas.api_response import APIResponse, TranscriptUploadResponse
 from app.schemas.ml_process_response import (
     ImageGeneratorResponse,
     VideoGeneratorResponse,
@@ -37,13 +37,13 @@ def generate_transcript(request: VideoRequest):
         logger.info(f"Generating transcript for video ID: {request.videoId}")
         summary = transcript_generator(request.videoId)
         
-        # Check if error response
-        if isinstance(summary, dict) and not summary.get("success", True):
+        # Check if error response (TranscriptUploadResponse is returned on error)
+        if isinstance(summary, TranscriptUploadResponse):
             return APIResponse(
                 success=False,
-                message=summary.get("message", "Failed to generate transcript"),
+                message=summary.message,
                 data=None,
-                status_code=summary.get("status", 404)
+                status_code=summary.status
             )
         
         logger.info("Transcript generated successfully")
@@ -55,9 +55,11 @@ def generate_transcript(request: VideoRequest):
         )
     except Exception as e:
         logger.error(f"Error generating transcript: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate transcript: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to generate transcript: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -70,12 +72,6 @@ def generate_story(request: StoryRequest):
         logger.info("Generating story from summary")
         story = story_generator(request.summary)
         
-        if story is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Story generation failed"
-            )
-        
         logger.info(f"Story generated with {len(story.scenes)} scenes")
         return APIResponse(
             success=True,
@@ -85,9 +81,11 @@ def generate_story(request: StoryRequest):
         )
     except Exception as e:
         logger.error(f"Error generating story: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate story: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to generate story: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -114,9 +112,11 @@ def generate_images(request: ImageRequest):
         )
     except Exception as e:
         logger.error(f"Error generating images: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate images: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to generate images: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -142,9 +142,11 @@ def generate_videos(request: VideoClipRequest):
         )
     except Exception as e:
         logger.error(f"Error generating videos: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate videos: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to generate videos: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -170,9 +172,11 @@ def generate_voiceovers(request: VoiceoverRequest):
         )
     except Exception as e:
         logger.error(f"Error generating voiceovers: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate voiceovers: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to generate voiceovers: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -193,12 +197,6 @@ def generate_final_video(request: VideoAssembleRequest):
             bg_music_path=request.bg_music_path
         )
         
-        if output is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Final video assembly failed"
-            )
-        
         logger.info(f"Final video created: {output}")
         return APIResponse(
             success=True,
@@ -208,9 +206,11 @@ def generate_final_video(request: VideoAssembleRequest):
         )
     except Exception as e:
         logger.error(f"Error assembling final video: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to assemble final video: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Failed to assemble final video: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 
@@ -226,21 +226,18 @@ def run_complete_pipeline(request: CompletePipelineRequest):
         logger.info("Step 1: Generating transcript...")
         summary = transcript_generator(request.videoId)
         
-        if isinstance(summary, dict) and not summary.get("success", True):
-            raise HTTPException(
-                status_code=404,
-                detail=summary.get("message", "Failed to generate transcript")
+        # Check if error response (TranscriptUploadResponse is returned on error)
+        if isinstance(summary, TranscriptUploadResponse):
+            return APIResponse(
+                success=False,
+                message=summary.message,
+                data=None,
+                status_code=summary.status
             )
         
         # Step 2: Generate story
         logger.info("Step 2: Generating story...")
         story = story_generator(summary)
-        
-        if story is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Story generation failed"
-            )
         
         # Step 3: Run complete pipeline
         logger.info("Step 3: Running complete video pipeline...")
@@ -248,12 +245,6 @@ def run_complete_pipeline(request: CompletePipelineRequest):
             story_scenes=story.scenes,
             output_video_name=request.output_video_name
         )
-        
-        if final_video is None:
-            raise HTTPException(
-                status_code=500,
-                detail="Complete pipeline failed"
-            )
         
         logger.info(f"Complete pipeline finished: {final_video}")
         return APIResponse(
@@ -266,13 +257,13 @@ def run_complete_pipeline(request: CompletePipelineRequest):
             },
             status_code=200
         )
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error in complete pipeline: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Complete pipeline failed: {str(e)}"
+        return APIResponse(
+            success=False,
+            message=f"Complete pipeline failed: {str(e)}",
+            data=None,
+            status_code=500
         )
 
 

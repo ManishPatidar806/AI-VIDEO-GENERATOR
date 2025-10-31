@@ -41,6 +41,11 @@ export default function Step2Prompts() {
       // Backend expects summary, not transcript_id
       const response = await storyApi.generate({ summary });
       
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to generate prompts");
+      }
+      
       // Backend returns: { success, message, data: { scenes: [...], ... }, status_code }
       // Axios puts it in response.data, so we access response.data.data.scenes
       const storyDataResponse = response.data.data || response.data;
@@ -97,6 +102,11 @@ export default function Step2Prompts() {
         existing_story: storyData,
         summary: summary
       });
+      
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to regenerate scene");
+      }
       
       // Update the story data and prompts
       const storyDataResponse = response.data.data || response.data;

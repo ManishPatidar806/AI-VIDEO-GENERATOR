@@ -29,6 +29,11 @@ export default function Step1Summarize() {
       const { transcriptApi } = await import("@/lib/api");
       const response = await transcriptApi.generate({ youtube_url: youtubeUrl });
       
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to generate summary");
+      }
+      
       // Backend returns: { success, message, data: { summary: "..." }, status_code }
       // Axios puts it in response.data, so we access response.data.data.summary
       const summaryText = response.data.data?.summary || response.data.summary || "";
@@ -62,6 +67,11 @@ export default function Step1Summarize() {
     try {
       const { transcriptApi } = await import("@/lib/api");
       const response = await transcriptApi.generate({ youtube_url: youtubeUrl });
+      
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to regenerate summary");
+      }
       
       // Backend returns: { success, message, data: { summary: "..." }, status_code }
       // Axios puts it in response.data, so we access response.data.data.summary

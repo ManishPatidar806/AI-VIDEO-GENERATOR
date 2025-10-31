@@ -30,7 +30,7 @@ client = genai.Client()
 pydanticParser = PydanticOutputParser(pydantic_object=StoryListResponse)
 
 # ! Youtube Transcript and Summary Generator
-def transcript_generator(videoId:str)->str:
+def transcript_generator(videoId:str):
     try:
         summary=""
         api = YouTubeTranscriptApi()
@@ -62,8 +62,8 @@ def story_generator(summary:str):
         parsed_output = pydanticParser.parse(result.content)
         return parsed_output
     except Exception as e:
-        print(e)
-        print("Somthing went worng in story generator script")    
+        print(f"Error in story generator: {e}")
+        raise Exception(f"Failed to generate story: {str(e)}")    
 
 
 
@@ -74,8 +74,8 @@ def image_generator(scenes: List["StoryGeneratorResponse"], output_dir: str) -> 
     and returns a list of ImageGeneratorResponse objects with the local path.
     """
     generated_scenes_with_images = []
+    failed_scenes = []
 
-    # ✅ Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
     try:
@@ -84,21 +84,23 @@ def image_generator(scenes: List["StoryGeneratorResponse"], output_dir: str) -> 
             api_key=settings.NEBIUS_API_KEYS
         )
     except NameError:
-        print("ERROR: 'settings' or 'settings.NEBIUS_API_KEYS' is not defined.")
-        return []
+        error_msg = "ERROR: 'settings' or 'settings.NEBIUS_API_KEYS' is not defined."
+        print(error_msg)
+        raise Exception(error_msg)
 
     asset_counter = 1
 
     for scene_data in scenes:
-        # ✅ Skip scenes with no valid prompts
+        
         if not scene_data.prompts or not scene_data.prompts[0]:
             print(f"Skipping scene '{scene_data.scene}': No valid prompt provided.")
+            failed_scenes.append(scene_data.scene)
             continue
 
         prompt_text = scene_data.prompts[0]
         scene_title_safe = scene_data.scene.replace(' ', '_').replace(':', '')
 
-        # ✅ Avoid Pydantic ValidationError: add image=None
+        
         scene_dict = scene_data.model_dump()
         scene_dict["image"] = None
         scene_with_image = ImageGeneratorResponse(**scene_dict)
@@ -106,20 +108,20 @@ def image_generator(scenes: List["StoryGeneratorResponse"], output_dir: str) -> 
         print(f"[{asset_counter}/{len(scenes)}] Generating image for: {scene_data.scene}...")
 
         try:
-            # 1️⃣ Generate Image from Nebius AI API
+            
             response = client.images.generate(
                 model="black-forest-labs/flux-dev",
                 prompt=prompt_text,
             )
 
-            # 2️⃣ Extract the Image URL safely
+            
             image_url = getattr(response.data[0], "url", None)
             if not image_url:
                 raise ValueError("No image URL returned by Nebius API.")
 
             print(f"  -> API call successful. Downloading image...")
 
-            # 3️⃣ Download and store image locally
+            
             image_filename = os.path.join(output_dir, f"{asset_counter}_{scene_title_safe}.png")
             image_response = requests.get(image_url, stream=True)
             image_response.raise_for_status()
@@ -128,17 +130,26 @@ def image_generator(scenes: List["StoryGeneratorResponse"], output_dir: str) -> 
                 for chunk in image_response.iter_content(chunk_size=8192):
                     file.write(chunk)
 
-            # 4️⃣ Update model with local path
+            
             scene_with_image.image = image_filename
             print(f"  -> Image saved: {image_filename}")
 
         except Exception as e:
-            print(f"  -> ERROR generating/saving image for '{scene_data.scene}': {e}")
+            error_msg = f"ERROR generating/saving image for '{scene_data.scene}': {e}"
+            print(f"  -> {error_msg}")
+            failed_scenes.append(scene_data.scene)
 
         generated_scenes_with_images.append(scene_with_image)
         asset_counter += 1
 
     print("\n✅ Image generation phase complete.")
+    
+    # Raise exception if too many scenes failed
+    if len(failed_scenes) == len(scenes):
+        raise Exception(f"All image generations failed. Please check API keys and network connection.")
+    elif len(failed_scenes) > 0:
+        print(f"⚠️ Warning: {len(failed_scenes)} scenes failed to generate images: {', '.join(failed_scenes)}")
+    
     return generated_scenes_with_images
 
 
@@ -157,6 +168,7 @@ def video_generator(images: List["ImageGeneratorResponse"], output_dir: str = "g
     """
     os.makedirs(output_dir, exist_ok=True)
     videos = []
+    failed_videos = []
 
     for i, image in enumerate(images, 1):
         uploaded_file = None
@@ -212,11 +224,16 @@ def video_generator(images: List["ImageGeneratorResponse"], output_dir: str = "g
                 video_scene.video_path = output_path
                 print(f"\n✅ Video generated and saved: {output_path}")
             else:
-                print(f"\n❌ Video generation failed for scene: {image.scene}")
-                print(f"Error details: {getattr(operation, 'error', 'No details available')}")
+                error_detail = getattr(operation, 'error', 'No details available')
+                error_msg = f"Video generation failed for scene: {image.scene}"
+                print(f"\n❌ {error_msg}")
+                print(f"Error details: {error_detail}")
+                failed_videos.append(image.scene)
 
         except Exception as e:
-            print(f"\n🔥 Error generating video for {image.scene}: {e}")
+            error_msg = f"Error generating video for {image.scene}: {e}"
+            print(f"\n🔥 {error_msg}")
+            failed_videos.append(image.scene)
 
         finally:
             # --- 6️⃣ Clean up uploaded file ---
@@ -229,7 +246,14 @@ def video_generator(images: List["ImageGeneratorResponse"], output_dir: str = "g
 
         videos.append(video_scene)
 
-    print("\n🎥 All videos processed successfully.")
+    print("\n🎥 All videos processed.")
+    
+    # Raise exception if too many videos failed
+    if len(failed_videos) == len(images):
+        raise Exception(f"All video generations failed. Please check API keys and service availability.")
+    elif len(failed_videos) > 0:
+        print(f"⚠️ Warning: {len(failed_videos)} videos failed to generate: {', '.join(failed_videos)}")
+    
     return videos
 
 
@@ -242,6 +266,7 @@ def generate_voiceover(scenes_with_images: List["VideoGeneratorResponse"], outpu
     os.makedirs(output_dir, exist_ok=True)
     
     scenes_with_voiceovers = []
+    failed_voiceovers = []
     
     print("\n🎤 Starting Voiceover Generation Phase ---")
     
@@ -260,11 +285,20 @@ def generate_voiceover(scenes_with_images: List["VideoGeneratorResponse"], outpu
             scene_with_voiceover.voiceover = tts_path
             print(f"  -> Voiceover saved: {tts_path}")
         except Exception as e:
-            print(f"  -> ⚠️ Failed to generate voiceover for {scene.scene}: {e}")
+            error_msg = f"Failed to generate voiceover for {scene.scene}: {e}"
+            print(f"  -> ⚠️ {error_msg}")
+            failed_voiceovers.append(scene.scene)
         
         scenes_with_voiceovers.append(scene_with_voiceover)
     
     print("✅ Voiceover generation phase complete.\n")
+    
+    # Raise exception if too many voiceovers failed
+    if len(failed_voiceovers) == len(scenes_with_images):
+        raise Exception(f"All voiceover generations failed. Please check network connection and gTTS service.")
+    elif len(failed_voiceovers) > 0:
+        print(f"⚠️ Warning: {len(failed_voiceovers)} voiceovers failed to generate: {', '.join(failed_voiceovers)}")
+    
     return scenes_with_voiceovers
 
 
@@ -282,6 +316,7 @@ def assemble_final_video(scenes_with_voiceovers: List[VideoWithVoiceoverResponse
     final_clips = []
     audio_segments = []
     total_time = 0
+    skipped_scenes = []
 
     print("\n🎬 Starting Final Video Assembly (Video Clips + Narration) ---")
 
@@ -289,12 +324,16 @@ def assemble_final_video(scenes_with_voiceovers: List[VideoWithVoiceoverResponse
         video_path = scene_data.video_path
         if not video_path or not os.path.exists(video_path):
             # Check for video_path, not image_path
-            print(f"⚠️ Skipping Scene {i+1}: Missing video clip -> {video_path}")
+            warning_msg = f"Skipping Scene {i+1}: Missing video clip -> {video_path}"
+            print(f"⚠️ {warning_msg}")
+            skipped_scenes.append(f"Scene {i+1} ({scene_data.scene})")
             continue
 
         voiceover_path = scene_data.voiceover
         if not voiceover_path or not os.path.exists(voiceover_path):
-            print(f"⚠️ Skipping Scene {i+1}: No voiceover for scene '{scene_data.scene}'")
+            warning_msg = f"Skipping Scene {i+1}: No voiceover for scene '{scene_data.scene}'"
+            print(f"⚠️ {warning_msg}")
+            skipped_scenes.append(f"Scene {i+1} ({scene_data.scene})")
             continue
 
         # Load narration audio to get duration
@@ -320,8 +359,14 @@ def assemble_final_video(scenes_with_voiceovers: List[VideoWithVoiceoverResponse
         total_time += duration
 
     if not final_clips:
-        print("❌ No valid video clips found. Exiting.")
-        return None
+        error_msg = "No valid video clips found. Cannot assemble final video."
+        print(f"❌ {error_msg}")
+        if skipped_scenes:
+            error_msg += f" Skipped scenes: {', '.join(skipped_scenes)}"
+        raise Exception(error_msg)
+
+    if skipped_scenes:
+        print(f"\n⚠️ Warning: {len(skipped_scenes)} scenes were skipped: {', '.join(skipped_scenes)}")
 
     print(f"\n📹 Concatenating {len(final_clips)} video clips...")
     # Concatenate video clips
@@ -367,57 +412,58 @@ def complete_video_pipeline(story_scenes: List["StoryGeneratorResponse"], output
     print("🚀 STARTING COMPLETE VIDEO GENERATION PIPELINE (Veo Enabled)")
     print("=" * 60)
 
-    # --- Step 1: Generate Reference Images (Nebius/Flux) ---
-    # These images are used as visual cues or references for the Veo model.
-    print("\n📸 STEP 1: Generating reference images for all scenes (using Nebius/Flux)...")
-    scenes_with_images = image_generator(scenes=story_scenes, output_dir=OUTPUT_DIR)
+    try:
+        # --- Step 1: Generate Reference Images (Nebius/Flux) ---
+        # These images are used as visual cues or references for the Veo model.
+        print("\n📸 STEP 1: Generating reference images for all scenes (using Nebius/Flux)...")
+        scenes_with_images = image_generator(scenes=story_scenes, output_dir=OUTPUT_DIR)
 
-    if not scenes_with_images:
-        print("❌ No images generated. Aborting pipeline.")
-        return None
+        if not scenes_with_images:
+            raise Exception("No images generated. Cannot proceed with pipeline.")
 
-    # --- Step 2: Generate Video Clips (Veo 3.1) ---
-    # The Veo function uses the prompts/images from the previous step to create video clips.
-    # We must define a new directory for the videos to avoid mixing with reference images.
-    VIDEO_CLIPS_DIR = "generated_videos" 
-    os.makedirs(VIDEO_CLIPS_DIR, exist_ok=True)
-    print(f"\n🎥 STEP 2: Generating video clips for all scenes (using Veo 3.1 in {VIDEO_CLIPS_DIR})...")
-    scenes_with_videos = video_generator(
-        images=scenes_with_images, 
-        output_dir=VIDEO_CLIPS_DIR
-    )
+        # --- Step 2: Generate Video Clips (Veo 3.1) ---
+        # The Veo function uses the prompts/images from the previous step to create video clips.
+        # We must define a new directory for the videos to avoid mixing with reference images.
+        VIDEO_CLIPS_DIR = "generated_videos" 
+        os.makedirs(VIDEO_CLIPS_DIR, exist_ok=True)
+        print(f"\n🎥 STEP 2: Generating video clips for all scenes (using Veo 3.1 in {VIDEO_CLIPS_DIR})...")
+        scenes_with_videos = video_generator(
+            images=scenes_with_images, 
+            output_dir=VIDEO_CLIPS_DIR
+        )
 
-    if not scenes_with_videos:
-        print("❌ No video clips generated. Aborting pipeline.")
-        return None
+        if not scenes_with_videos:
+            raise Exception("No video clips generated. Cannot proceed with pipeline.")
 
-    # --- Step 3: Generate Voiceovers (gTTS) ---
-    # The voiceover function now takes the list of scenes WITH video paths.
-    print("\n🎤 STEP 3: Generating voiceovers for all scenes...")
-    # NOTE: generate_voiceover now expects VideoGeneratorResponse objects (which contain video_path)
-    scenes_with_voiceovers = generate_voiceover(scenes_with_images=scenes_with_videos)
+        # --- Step 3: Generate Voiceovers (gTTS) ---
+        # The voiceover function now takes the list of scenes WITH video paths.
+        print("\n🎤 STEP 3: Generating voiceovers for all scenes...")
+        # NOTE: generate_voiceover now expects VideoGeneratorResponse objects (which contain video_path)
+        scenes_with_voiceovers = generate_voiceover(scenes_with_images=scenes_with_videos)
 
-    if not scenes_with_voiceovers:
-        print("❌ No voiceovers generated. Aborting pipeline.")
-        return None
+        if not scenes_with_voiceovers:
+            raise Exception("No voiceovers generated. Cannot proceed with pipeline.")
 
-    # --- Step 4: Assemble Final Video (MoviePy) ---
-    print("\n🎬 STEP 4: Assembling final video from video clips and voiceovers...")
+        # --- Step 4: Assemble Final Video (MoviePy) ---
+        print("\n🎬 STEP 4: Assembling final video from video clips and voiceovers...")
 
-    final_video_path = assemble_final_video(
-        scenes_with_voiceovers=scenes_with_voiceovers,
-        output_file=output_video_name
-    )
+        final_video_path = assemble_final_video(
+            scenes_with_voiceovers=scenes_with_voiceovers,
+            output_file=output_video_name
+        )
 
-    print("\n" + "=" * 60)
-    if final_video_path:
-        print("PIPELINE COMPLETE!")
+        print("\n" + "=" * 60)
+        print("✅ PIPELINE COMPLETE!")
         print(f"Final video: {final_video_path}")
-    else:
-        print("Pipeline failed to create video.")
-    print("=" * 60)
+        print("=" * 60)
 
-    return final_video_path
+        return final_video_path
+    
+    except Exception as e:
+        print("\n" + "=" * 60)
+        print(f"❌ PIPELINE FAILED: {str(e)}")
+        print("=" * 60)
+        raise Exception(f"Complete pipeline failed: {str(e)}")
 
 
 # ===== REGENERATION FUNCTIONS =====
@@ -442,7 +488,7 @@ def regenerate_story_with_modifications(summary: str, modifications: str = None,
         )
         
         # Build the prompt with modifications
-        base_prompt = image_generator_prompt(summary)
+        base_prompt = image_generator_prompt(summary, pydanticParser)
         
         if modifications:
             modification_instruction = f"\n\nIMPORTANT MODIFICATIONS REQUESTED BY USER:\n{modifications}\n\nPlease incorporate these modifications while maintaining the overall structure and format."
@@ -459,7 +505,7 @@ def regenerate_story_with_modifications(summary: str, modifications: str = None,
         return parsed_output
     except Exception as e:
         print(f"Error regenerating story: {e}")
-        return None
+        raise Exception(f"Failed to regenerate story: {str(e)}")
 
 
 def regenerate_specific_scenes(scenes_to_regenerate: List[int], existing_story: StoryListResponse, summary: str):
@@ -523,7 +569,7 @@ Return ONLY a valid JSON object with this structure:
         return StoryListResponse(scenes=new_scenes)
     except Exception as e:
         print(f"Error regenerating specific scenes: {e}")
-        return existing_story
+        raise Exception(f"Failed to regenerate scenes: {str(e)}")
 
 
 def regenerate_single_image(scene: StoryGeneratorResponse, output_dir: str) -> ImageGeneratorResponse:
@@ -581,7 +627,7 @@ def regenerate_single_image(scene: StoryGeneratorResponse, output_dir: str) -> I
         
     except Exception as e:
         print(f"❌ Error regenerating image: {e}")
-        return None
+        raise Exception(f"Failed to regenerate image: {str(e)}")
 
 
 def regenerate_single_video(image_scene: ImageGeneratorResponse, output_dir: str) -> VideoGeneratorResponse:
@@ -664,7 +710,7 @@ def regenerate_single_video(image_scene: ImageGeneratorResponse, output_dir: str
         
     except Exception as e:
         print(f"❌ Error regenerating video: {e}")
-        return None
+        raise Exception(f"Failed to regenerate video: {str(e)}")
 
 
 def regenerate_single_voiceover(scene: VideoGeneratorResponse, output_dir: str = "voice_overs") -> VideoWithVoiceoverResponse:
@@ -701,7 +747,7 @@ def regenerate_single_voiceover(scene: VideoGeneratorResponse, output_dir: str =
         
     except Exception as e:
         print(f"❌ Error regenerating voiceover: {e}")
-        return None
+        raise Exception(f"Failed to regenerate voiceover: {str(e)}")
 
 
 def modify_scene_with_user_input(scene: StoryGeneratorResponse, user_input: str, summary: str = "") -> StoryGeneratorResponse:

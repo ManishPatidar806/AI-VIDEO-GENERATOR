@@ -48,6 +48,11 @@ export default function Step4Video() {
       const response = await videoApi.generate({ image_data: imageData });
       setProgress(60);
 
+      // Check if the backend response indicates success
+      if (response.data && !response.data.success) {
+        throw new Error(response.data.message || "Failed to generate video");
+      }
+
       // Backend returns video data
       const responseData = response.data.data || response.data;
       const videos = responseData.videos || [];
