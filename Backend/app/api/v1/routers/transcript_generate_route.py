@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
-# ===== Endpoints =====
+#! ===== Endpoints =====
 
 @router.post("/transcript", response_model=APIResponse)
 def generate_transcript(request: VideoRequest):
@@ -128,7 +128,6 @@ def generate_videos(request: VideoClipRequest):
     try:
         logger.info(f"Generating videos for {len(request.image_data)} scenes")
         
-        # Convert dict to ImageGeneratorResponse objects
         images = [ImageGeneratorResponse(**img) for img in request.image_data]
         
         videos = video_generator(images, output_dir=request.output_dir)
@@ -158,7 +157,6 @@ def generate_voiceovers(request: VoiceoverRequest):
     try:
         logger.info(f"Generating voiceovers for {len(request.video_data)} scenes")
         
-        # Convert dict to VideoGeneratorResponse objects
         videos = [VideoGeneratorResponse(**vid) for vid in request.video_data]
         
         voices = generate_voiceover(videos, output_dir=request.output_dir)
@@ -188,7 +186,6 @@ def generate_final_video(request: VideoAssembleRequest):
     try:
         logger.info(f"Assembling final video with {len(request.scenes_with_voiceovers)} scenes")
         
-        # Convert dict to VideoWithVoiceoverResponse objects
         scenes = [VideoWithVoiceoverResponse(**scene) for scene in request.scenes_with_voiceovers]
         
         output = assemble_final_video(
@@ -213,7 +210,7 @@ def generate_final_video(request: VideoAssembleRequest):
             status_code=500
         )
 
-
+# ! Complete pipeline without human interfere
 @router.post("/complete-pipeline", response_model=APIResponse)
 def run_complete_pipeline(request: CompletePipelineRequest):
     """
@@ -222,11 +219,11 @@ def run_complete_pipeline(request: CompletePipelineRequest):
     try:
         logger.info(f"Starting complete pipeline for video ID: {request.videoId}")
         
-        # Step 1: Generate transcript
+        
         logger.info("Step 1: Generating transcript...")
         summary = transcript_generator(request.videoId)
         
-        # Check if error response (TranscriptUploadResponse is returned on error)
+        
         if isinstance(summary, TranscriptUploadResponse):
             return APIResponse(
                 success=False,
@@ -235,11 +232,9 @@ def run_complete_pipeline(request: CompletePipelineRequest):
                 status_code=summary.status
             )
         
-        # Step 2: Generate story
         logger.info("Step 2: Generating story...")
         story = story_generator(summary)
         
-        # Step 3: Run complete pipeline
         logger.info("Step 3: Running complete video pipeline...")
         final_video = complete_video_pipeline(
             story_scenes=story.scenes,
