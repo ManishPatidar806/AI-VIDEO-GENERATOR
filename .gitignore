@@ -1,0 +1,164 @@
+# ------------------------------
+# Python / FastAPI Backend
+# ------------------------------
+
+# Byte-compiled / optimized / DLL files
+Backend/__pycache__/
+Backend/**/__pycache__/
+Backend/**/*.py[cod]
+Backend/**/*$py.class
+
+# Virtual environment
+Backend/venv/
+Backend/.venv/
+Backend/env/
+Backend/ENV/
+Backend/env.bak/
+Backend/venv.bak/
+
+# Environment variables
+Backend/.env
+Backend/.env.local
+Backend/.env.*.local
+Backend/*.env
+Backend/*.env.local
+Backend/*.env.bak
+
+# PyInstaller
+Backend/*.spec
+
+# Unit test / coverage reports
+Backend/htmlcov/
+Backend/.tox/
+Backend/.nox/
+Backend/.coverage
+Backend/.coverage.*
+Backend/.cache
+Backend/pytest_cache/
+Backend/nosetests.xml
+Backend/coverage.xml
+Backend/*.cover
+Backend/*.py,cover
+
+# Type checkers
+Backend/.mypy_cache/
+Backend/.dmypy.json
+Backend/dmypy.json
+Backend/.pyre/
+
+# Jupyter Notebook checkpoints
+Backend/.ipynb_checkpoints
+
+# SQLite / Database
+Backend/*.db
+Backend/*.sqlite3
+
+# Build artifacts
+Backend/build/
+Backend/dist/
+Backend/*.egg-info/
+Backend/.eggs/
+Backend/*.manifest
+
+# FastAPI static/media/generated files
+Backend/staticfiles/
+Backend/media/
+Backend/uploads/
+Backend/temp/
+
+# Generated content (AI outputs) - Backend specific
+Backend/generated_images/
+Backend/voice_overs/
+Backend/nebius_scene_images/
+
+# Test data files - Backend specific
+Backend/testData.json
+Backend/showData.json
+
+# Cache
+Backend/__pypackages__/
+
+# ------------------------------
+# Frontend (React + Vite + Bun)
+# ------------------------------
+
+# Dependencies
+Frontend/node_modules/
+Frontend/.pnp
+Frontend/.pnp.js
+
+# Bun lockfile
+Frontend/bun.lockb
+
+# Build output
+Frontend/dist/
+Frontend/dist-ssr/
+Frontend/*.local
+
+# Logs
+Frontend/logs/
+Frontend/*.log
+Frontend/npm-debug.log*
+Frontend/yarn-debug.log*
+Frontend/yarn-error.log*
+Frontend/pnpm-debug.log*
+Frontend/lerna-debug.log*
+
+# Testing
+Frontend/coverage/
+
+# Environment variables - Frontend specific
+Frontend/.env
+Frontend/.env.local
+Frontend/.env.*.local
+
+# ------------------------------
+# Docker (Root level)
+# ------------------------------
+Dockerfile~
+docker-compose*.yml~
+.docker/
+*.pid
+
+# ------------------------------
+# Editor & IDE
+# ------------------------------
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# ------------------------------
+# OS Files
+# ------------------------------
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+*.swp
+*.swo
+*.kate-swp
+.directory

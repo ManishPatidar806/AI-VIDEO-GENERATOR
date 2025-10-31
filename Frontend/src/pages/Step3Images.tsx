@@ -5,8 +5,9 @@ import { StepProgress } from "@/components/StepProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, ArrowLeft, Loader2, Check, RefreshCw, Image as ImageIcon } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2, Check, RefreshCw, Image as ImageIcon, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 const steps = [
   { number: 1, title: "Summarize" },
@@ -33,6 +34,8 @@ export default function Step3Images() {
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImageData, setGeneratedImageData] = useState<any[]>([]);
+  const [modifyingImageId, setModifyingImageId] = useState<string | null>(null);
+  const [userInputs, setUserInputs] = useState<{ [key: string]: string }>({});
 
   const handleGenerateAll = async () => {
     setIsGenerating(true);
@@ -188,6 +191,91 @@ export default function Step3Images() {
     }
   };
 
+  const handleModifyImage = async (id: string) => {
+    const userInput = userInputs[id];
+    
+    if (!userInput || !userInput.trim()) {
+      toast({
+        title: "No Changes Specified",
+        description: "Please enter your requested changes first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setModifyingImageId(id);
+    setImages(images.map(img => 
+      img.id === id ? { ...img, isGenerating: true } : img
+    ));
+    
+    try {
+      const { imageApi } = await import("@/lib/api");
+      
+      // Find the corresponding scene data for this image
+      const imageIndex = images.findIndex(img => img.id === id);
+      const sceneData = generatedImageData[imageIndex] || storyData?.scenes?.[imageIndex] || {
+        scene: images[imageIndex]?.scene || "Scene",
+        narration: images[imageIndex]?.scene || "",
+        visual_cues: images[imageIndex]?.scene || "",
+        prompts: [images[imageIndex]?.scene || ""]
+      };
+      
+      // Call the modify image endpoint
+      const response = await imageApi.modifyImage({
+        scene_data: sceneData,
+        user_input: userInput
+      });
+      
+      const responseData = response.data.data || response.data;
+      let imageUrl = responseData.image || responseData.url || responseData.image_url || "";
+      
+      // Convert backend image path to accessible URL
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      if (imageUrl && !imageUrl.startsWith('http')) {
+        const cleanPath = imageUrl.replace(/^\/+/, '').replace(/\\/g, '/');
+        imageUrl = `${API_BASE_URL}/${cleanPath}`;
+      }
+      
+      console.log('Modified Image URL:', imageUrl);
+      
+      // Update the generatedImageData as well
+      const newImageData = [...generatedImageData];
+      newImageData[imageIndex] = responseData;
+      setGeneratedImageData(newImageData);
+      
+      setImages(images.map(img => 
+        img.id === id ? { 
+          ...img, 
+          imageUrl: imageUrl, 
+          isGenerating: false 
+        } : img
+      ));
+      
+      // Clear the input
+      setUserInputs({ ...userInputs, [id]: "" });
+      
+      toast({
+        title: "Image Modified",
+        description: "New image has been generated based on your changes.",
+      });
+    } catch (error: any) {
+      setImages(images.map(img => 
+        img.id === id ? { ...img, isGenerating: false } : img
+      ));
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          "Failed to modify image";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setModifyingImageId(null);
+    }
+  };
+
   const handleNext = () => {
     const approvedImages = images.filter(img => img.approved);
     if (approvedImages.length > 0) {
@@ -326,6 +414,18 @@ export default function Step3Images() {
                     </div>
                     <CardContent className="p-4 space-y-3">
                       <h3 className="font-semibold truncate">{image.scene}</h3>
+                      
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">Request Changes:</label>
+                        <Textarea
+                          placeholder="e.g., 'Add more colors', 'Change background', 'Make it darker'..."
+                          value={userInputs[image.id] || ""}
+                          onChange={(e) => setUserInputs({ ...userInputs, [image.id]: e.target.value })}
+                          className="min-h-[60px] text-sm"
+                          disabled={image.isGenerating || modifyingImageId === image.id}
+                        />
+                      </div>
+                      
                       <div className="flex gap-2">
                         <Button
                           onClick={() => handleApprove(image.id)}
@@ -338,10 +438,20 @@ export default function Step3Images() {
                           {image.approved ? "Approved" : "Approve"}
                         </Button>
                         <Button
+                          onClick={() => handleModifyImage(image.id)}
+                          variant="default"
+                          size="sm"
+                          disabled={image.isGenerating || modifyingImageId === image.id || !userInputs[image.id]?.trim()}
+                          title="Modify with AI"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
                           onClick={() => handleRegenerate(image.id)}
                           variant="outline"
                           size="sm"
                           disabled={image.isGenerating}
+                          title="Regenerate"
                         >
                           <RefreshCw className="w-4 h-4" />
                         </Button>

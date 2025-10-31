@@ -103,11 +103,13 @@ export const storyApi = {
   generate: (data: { summary: string }) =>
     api.post('/api/v1/generate/story', data),
   regenerate: (data: { summary: string; modifications?: string; existing_story?: any }) =>
-    api.post('/api/v1/generate/regenerate/story', data),
+    api.post('/api/v1/regenerate/story', data),
   regenerateScene: (data: { scene_indices: number[]; existing_story: any; summary: string }) =>
-    api.post('/api/v1/generate/regenerate/specific-scenes', data),
+    api.post('/api/v1/regenerate/specific-scenes', data),
   updateScene: (data: { scene_id: string; content: string }) =>
     api.put('/api/v1/generate/update/scene', data),
+  modifyScene: (data: { scene_data: any; user_input: string; summary?: string }) =>
+    api.post('/api/v1/regenerate/modify-scene', data),
 };
 
 // Image endpoints
@@ -115,9 +117,11 @@ export const imageApi = {
   generate: (data: { story_data: any[]; output_dir?: string }) =>
     api.post('/api/v1/generate/images', data),
   regenerate: (data: { scene_data: any; output_dir?: string }) =>
-    api.post('/api/v1/generate/regenerate/image', data),
+    api.post('/api/v1/regenerate/image', data),
   batchRegenerate: (data: { story_data: any[]; output_dir?: string }) =>
-    api.post('/api/v1/generate/batch-regenerate/images', data),
+    api.post('/api/v1/regenerate/batch-regenerate/images', data),
+  modifyImage: (data: { scene_data: any; user_input: string; output_dir?: string }) =>
+    api.post('/api/v1/regenerate/modify-image', data),
 };
 
 // Video endpoints
@@ -125,9 +129,9 @@ export const videoApi = {
   generate: (data: { image_data: any[]; output_dir?: string }) =>
     api.post('/api/v1/generate/videos', data),
   regenerate: (data: { image_scene_data: any; output_dir?: string }) =>
-    api.post('/api/v1/generate/regenerate/video', data),
+    api.post('/api/v1/regenerate/video', data),
   batchRegenerate: (data: { image_data: any[]; output_dir?: string }) =>
-    api.post('/api/v1/generate/batch-regenerate/videos', data),
+    api.post('/api/v1/regenerate/batch-regenerate/videos', data),
 };
 
 // Voiceover endpoints
@@ -135,7 +139,7 @@ export const voiceoverApi = {
   generate: (data: { story_id: string; voice_id?: string }) =>
     api.post('/api/v1/generate/voiceovers', data),
   regenerate: (data: { voiceover_id: string; voice_id?: string }) =>
-    api.post('/api/v1/generate/regenerate/voiceover', data),
+    api.post('/api/v1/regenerate/voiceover', data),
 };
 
 // Final assembly endpoints
@@ -159,5 +163,5 @@ export const pipelineApi = {
     });
   },
   regenerateScenes: (data: { project_id: string; scene_ids: string[] }) =>
-    api.post('/api/v1/generate/regenerate/specific-scenes', data),
+    api.post('/api/v1/regenerate/specific-scenes', data),
 };

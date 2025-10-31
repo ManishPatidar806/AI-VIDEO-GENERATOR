@@ -703,3 +703,144 @@ def regenerate_single_voiceover(scene: VideoGeneratorResponse, output_dir: str =
         print(f"❌ Error regenerating voiceover: {e}")
         return None
 
+
+def modify_scene_with_user_input(scene: StoryGeneratorResponse, user_input: str, summary: str = "") -> StoryGeneratorResponse:
+    """
+    Modify a scene based on user input/feedback.
+    AI merges the current scene data with user's requested changes.
+    
+    Args:
+        scene: Current scene data
+        user_input: User's requested changes or opinions
+        summary: Optional video summary for context
+    
+    Returns:
+        StoryGeneratorResponse with modified scene
+    """
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model='gemini-2.5-flash',
+            google_api_key=settings.GOOGLE_API_KEY,
+            temperature=0.9
+        )
+        
+        # Create a prompt that merges user input with existing scene
+        modification_prompt = f"""
+You are an AI assistant helping to modify a video scene based on user feedback.
+
+CURRENT SCENE:
+- Title: {scene.scene}
+- Narration: {scene.narration}
+- Visual Cues: {scene.visual_cues}
+- Current Image Prompt: {scene.prompts[0] if scene.prompts else ""}
+
+USER'S REQUESTED CHANGES:
+{user_input}
+
+{f"VIDEO SUMMARY CONTEXT: {summary}" if summary else ""}
+
+TASK: Create an improved version of this scene that incorporates the user's feedback while maintaining professional quality.
+
+IMPORTANT:
+- Keep the scene title unless the user explicitly asks to change it
+- Merge the user's suggestions with the existing content intelligently
+- Maintain the overall structure and tone
+- Ensure visual cues are detailed and cinematic
+- Create image prompts that are optimized for AI image generation
+
+Return ONLY a valid JSON object with this exact structure:
+{{
+    "scene": "Scene title (keep original unless user requests change)",
+    "narration": "Updated narration incorporating user feedback",
+    "visual_cues": "Enhanced visual description with user's suggestions",
+    "prompts": ["Detailed AI image generation prompt incorporating changes"]
+}}
+"""
+        
+        result = llm.invoke(modification_prompt)
+        scene_parser = PydanticOutputParser(pydantic_object=StoryGeneratorResponse)
+        modified_scene = scene_parser.parse(result.content)
+        
+        print(f"✅ Scene modified based on user input: {modified_scene.scene}")
+        return modified_scene
+        
+    except Exception as e:
+        print(f"❌ Error modifying scene: {e}")
+        return scene  # Return original on error
+
+
+def modify_image_prompt_and_generate(scene: StoryGeneratorResponse, user_input: str, output_dir: str) -> ImageGeneratorResponse:
+    """
+    Modify image prompt based on user input and generate new image.
+    AI merges the current prompt with user's requested changes.
+    
+    Args:
+        scene: Current scene data with image prompt
+        user_input: User's requested changes for the image
+        output_dir: Directory to save the new image
+    
+    Returns:
+        ImageGeneratorResponse with the new image
+    """
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model='gemini-2.5-flash',
+            google_api_key=settings.GOOGLE_API_KEY,
+            temperature=0.8
+        )
+        
+        current_prompt = scene.prompts[0] if scene.prompts else scene.visual_cues
+        
+        # Create a prompt to merge user input with existing prompt
+        merge_prompt = f"""
+You are an AI assistant specializing in image generation prompts.
+
+CURRENT IMAGE PROMPT:
+{current_prompt}
+
+SCENE CONTEXT:
+- Scene: {scene.scene}
+- Visual Cues: {scene.visual_cues}
+
+USER'S REQUESTED CHANGES:
+{user_input}
+
+TASK: Create an enhanced image generation prompt that incorporates the user's changes while maintaining quality.
+
+REQUIREMENTS:
+- Merge the user's suggestions with the existing prompt seamlessly
+- Keep all positive elements of the original prompt
+- Add or modify elements as requested by the user
+- Ensure the prompt is optimized for AI image generation (FLUX model)
+- Be specific, descriptive, and detailed
+- Include artistic style, lighting, composition details
+
+Return ONLY the improved prompt text, no JSON, no extra formatting, just the prompt itself.
+"""
+        
+        result = llm.invoke(merge_prompt)
+        enhanced_prompt = result.content.strip()
+        
+        print(f"🎨 Enhanced prompt: {enhanced_prompt[:100]}...")
+        
+        # Update scene with new prompt
+        modified_scene = StoryGeneratorResponse(
+            scene=scene.scene,
+            narration=scene.narration,
+            visual_cues=scene.visual_cues,
+            prompts=[enhanced_prompt]
+        )
+        
+        # Generate image with new prompt
+        new_image = regenerate_single_image(modified_scene, output_dir)
+        
+        if new_image:
+            print(f"✅ Image generated with modified prompt")
+            return new_image
+        else:
+            raise ValueError("Image generation failed")
+        
+    except Exception as e:
+        print(f"❌ Error modifying image prompt: {e}")
+        return None
+

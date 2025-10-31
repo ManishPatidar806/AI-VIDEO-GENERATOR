@@ -3,7 +3,8 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.db.init_db import init_db
 from app.api.v1.routers import auth_router
-from app.api.v1.routers import transcript_route
+from app.api.v1.routers import transcript_generate_route
+from app.api.v1.routers import transcript_regenerate_route
 from contextlib import asynccontextmanager
 import os
 
@@ -24,8 +25,10 @@ def create_app()->FastAPI:
         return {"message": f"{settings.APP_NAME} is running!"}
 
     app.include_router(router=auth_router.router,prefix="/api/v1/auth",tags=["auth"])
-    app.include_router(router=transcript_route.router, prefix="/api/v1/generate", 
+    app.include_router(router=transcript_generate_route.router, prefix="/api/v1/generate", 
     tags=["Generator"])
+    app.include_router(router=transcript_regenerate_route.router, prefix="/api/v1/regenerate", 
+    tags=["ReGenerate"])
     
     # Mount static file directories for serving generated images and videos
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -5,9 +5,10 @@ import { StepProgress } from "@/components/StepProgress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, ArrowLeft, Loader2, Check, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2, Check, RefreshCw, Sparkles, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Textarea } from "@/components/ui/textarea";
 
 const steps = [
   { number: 1, title: "Summarize" },
@@ -29,6 +30,8 @@ export default function Step2Prompts() {
   const [isLoading, setIsLoading] = useState(false);
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [storyData, setStoryData] = useState<any>(null);
+  const [modifyingSceneId, setModifyingSceneId] = useState<string | null>(null);
+  const [userInputs, setUserInputs] = useState<{ [key: string]: string }>({});
   const summary = location.state?.summary || "";
 
   const handleGeneratePrompts = async () => {
@@ -124,6 +127,75 @@ export default function Step2Prompts() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleModifyScene = async (id: string) => {
+    const userInput = userInputs[id];
+    
+    if (!userInput || !userInput.trim()) {
+      toast({
+        title: "No Changes Specified",
+        description: "Please enter your requested changes first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setModifyingSceneId(id);
+    try {
+      const { storyApi } = await import("@/lib/api");
+      
+      // Find the scene index
+      const sceneIndex = prompts.findIndex(p => p.id === id);
+      
+      if (sceneIndex === -1 || !storyData) {
+        throw new Error("Scene not found");
+      }
+      
+      const currentScene = storyData.scenes[sceneIndex];
+      
+      // Call the modify scene endpoint
+      const response = await storyApi.modifyScene({
+        scene_data: currentScene,
+        user_input: userInput,
+        summary: summary
+      });
+      
+      // Update the specific scene in storyData
+      const modifiedScene = response.data.data || response.data;
+      const updatedStoryData = { ...storyData };
+      updatedStoryData.scenes[sceneIndex] = modifiedScene;
+      setStoryData(updatedStoryData);
+      
+      // Update prompts
+      const updatedPrompts = [...prompts];
+      updatedPrompts[sceneIndex] = {
+        id: modifiedScene.id || `${sceneIndex + 1}`,
+        scene: modifiedScene.title || modifiedScene.scene,
+        description: modifiedScene.description || modifiedScene.narration || modifiedScene.visual_cues,
+      };
+      setPrompts(updatedPrompts);
+      
+      // Clear the input
+      setUserInputs({ ...userInputs, [id]: "" });
+      
+      toast({
+        title: "Scene Modified",
+        description: "Scene has been updated based on your input.",
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          "Failed to modify scene";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setModifyingSceneId(null);
     }
   };
 
@@ -240,13 +312,44 @@ export default function Step2Prompts() {
                       <CollapsibleContent>
                         <CardContent className="space-y-3">
                           <p className="text-sm text-muted-foreground">{prompt.description}</p>
+                          
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Request Changes:</label>
+                            <Textarea
+                              placeholder="Describe what changes you want in this scene (e.g., 'Make it more dramatic', 'Add more technical details', 'Change the tone to be lighter')..."
+                              value={userInputs[prompt.id] || ""}
+                              onChange={(e) => setUserInputs({ ...userInputs, [prompt.id]: e.target.value })}
+                              className="min-h-[80px]"
+                              disabled={isLoading || modifyingSceneId === prompt.id}
+                            />
+                          </div>
+                          
                           <div className="flex gap-2">
+                            <Button
+                              onClick={() => handleModifyScene(prompt.id)}
+                              variant="default"
+                              size="sm"
+                              disabled={isLoading || modifyingSceneId === prompt.id || !userInputs[prompt.id]?.trim()}
+                              className="flex-1"
+                            >
+                              {modifyingSceneId === prompt.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Modifying...
+                                </>
+                              ) : (
+                                <>
+                                  <Edit className="w-4 h-4" />
+                                  Apply Changes
+                                </>
+                              )}
+                            </Button>
                             <Button
                               onClick={() => handleRegenerate(prompt.id)}
                               variant="outline"
                               size="sm"
-                              disabled={isLoading}
-                              className="w-full"
+                              disabled={isLoading || modifyingSceneId === prompt.id}
+                              className="flex-1"
                             >
                               {isLoading ? (
                                 <>
