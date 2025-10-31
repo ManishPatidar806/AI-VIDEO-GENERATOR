@@ -30,20 +30,20 @@ def create_app()->FastAPI:
     app.include_router(router=transcript_regenerate_route.router, prefix="/api/v1/regenerate", 
     tags=["ReGenerate"])
     
-    # Mount static file directories for serving generated images and videos
+   
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
-    # Mount generated_images directory
+  
     generated_images_path = os.path.join(base_dir, "generated_images")
     if os.path.exists(generated_images_path):
         app.mount("/generated_images", StaticFiles(directory=generated_images_path), name="generated_images")
     
-    # Mount nebius_scene_images directory
+   
     nebius_images_path = os.path.join(base_dir, "nebius_scene_images")
     if os.path.exists(nebius_images_path):
         app.mount("/nebius_scene_images", StaticFiles(directory=nebius_images_path), name="nebius_scene_images")
     
-    # Mount generated_videos directory
+ 
     generated_videos_path = os.path.join(base_dir, "generated_videos")
     if os.path.exists(generated_videos_path):
         app.mount("/generated_videos", StaticFiles(directory=generated_videos_path), name="generated_videos")

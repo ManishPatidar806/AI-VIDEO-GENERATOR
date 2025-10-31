@@ -17,7 +17,4 @@ class VideoSessions(SQLModel,table=True):
     updated_at:Optional[datetime]=None
 
 
-
-
-
     user: Optional[User]=Relationship(back_populates='video_sessions')
